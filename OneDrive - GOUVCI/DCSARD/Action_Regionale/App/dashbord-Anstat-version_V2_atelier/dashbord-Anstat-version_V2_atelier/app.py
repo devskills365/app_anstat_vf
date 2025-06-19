@@ -10,17 +10,21 @@ import urllib
 from io import StringIO
 from datetime import datetime
 from unidecode import unidecode
-import import_publications as conf_pub
+import sys
+import os
 from itertools import chain
 import my_queries as qr
 import config as cf
 from config import app, db 
 import io
+current_dir = os.path.dirname(os.path.abspath(__file__))
+config_pub_path = os.path.join(current_dir, 'config_pub')
+sys.path.append(config_pub_path)
+import import_publications as conf_pub
 global region_publication
 region_publication="PORO"# Cette variable va nous permettre 
 #https://colab.research.google.com/drive/1oBqwcSMb4YTrn0NFUiQzJCiZ65uIay_S?hl=fr#scrollTo=CJAQGVAWNNPw
-#brew services restart elastic/tap/elasticsearch-full
-#redis-server
+
 
 # Configuration du logger pour le débogage
 logging.basicConfig(level=logging.DEBUG)

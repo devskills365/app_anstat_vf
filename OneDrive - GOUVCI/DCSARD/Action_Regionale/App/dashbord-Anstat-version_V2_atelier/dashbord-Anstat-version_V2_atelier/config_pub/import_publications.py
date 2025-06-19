@@ -87,7 +87,7 @@ def load_publications_from_db(region=None):
                 query = "SELECT * FROM publications"
                 cursor.execute(query)
             results = cursor.fetchall()
-            print(f"[INFO] {len(results)} publication(s) trouvée(s) dans la base.")
+    
 
         publications = {}
         for row in results:
@@ -96,12 +96,10 @@ def load_publications_from_db(region=None):
             image_path = os.path.join('static', 'img', image_filename)
 
             if not os.path.exists(image_path):
-                print(f"[WARNING] Image '{image_filename}' non trouvée. Image par défaut utilisée.")
+
                 image_filename = "default.jpg"
                 if not os.path.exists(os.path.join('static', 'img', image_filename)):
                     print("[ERROR] Image par défaut 'default.jpg' également manquante !")
-            else:
-                print(f"[INFO] Image trouvée : {image_filename}")
 
             publication_data = {
                 'title': row['nom'],
@@ -111,13 +109,10 @@ def load_publications_from_db(region=None):
                 'year': row['date_production'],
                 'Nom_fichier_image': image_filename
             }
-
             publications[title_key] = publication_data
-            print(f"[DEBUG] Publication chargée : {publication_data}")
 
         print("[INFO] Chargement des publications terminé.")
         return publications
-
     except Exception as e:
         print(f"[ERROR] Erreur lors du chargement des publications : {e}")
         return {}
@@ -133,7 +128,7 @@ def get_regions():
         with connection.cursor() as cursor:
             cursor.execute("SELECT DISTINCT nom_region FROM publications")
             regions = [row['nom_region'] for row in cursor.fetchall()]
-        print(f"[INFO] {len(regions)} région(s) trouvée(s).")
+
         return regions
     except Exception as e:
         print(f"[ERROR] Erreur lors du chargement des régions : {e}")
