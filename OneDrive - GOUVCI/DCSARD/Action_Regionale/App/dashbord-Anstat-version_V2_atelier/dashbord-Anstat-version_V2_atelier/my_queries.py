@@ -5,7 +5,7 @@ import pandas as pd
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
-from elasticsearch import Elasticsearch
+
 from models import db, Region, IndicateurV2, V1Indicateur, Indicateur, DirectionStatistique  # Importer les modèles
 
 from sqlalchemy import create_engine, func
@@ -18,8 +18,34 @@ load_dotenv()
 # Utiliser les variables d'environnement pour MySQL
 host = os.getenv('MYSQL_HOST')
 database = os.getenv('MYSQL_DATABASE')
+#database2 = os.getenv('MYSQL_DATABASE2')
 user = os.getenv('MYSQL_USER')
 password = os.getenv('MYSQL_PASSWORD')
+
+
+import os
+import mysql.connector
+from mysql.connector import Error
+
+def connect_to_mysql():
+    """Se connecte à une base de données MySQL en utilisant les variables d'environnement."""
+    try:
+        connection = mysql.connector.connect(
+            host=os.getenv('MYSQL_HOST'),
+            database=os.getenv('MYSQL_DATABASE'),
+            user=os.getenv('MYSQL_USER'),
+            password=os.getenv('MYSQL_PASSWORD')
+        )
+
+        if connection.is_connected():
+            print("✅ Connexion réussie à la base MySQL")
+            return connection
+
+    except Error as e:
+        print(f"❌ Erreur de connexion : {e}")
+        return None
+
+
 # Création de la session SQLAlchemy
 engine = create_engine(
     f"mysql+pymysql://{user}:{password}@{host}/{database}"
@@ -44,7 +70,7 @@ def options_indicateur():
         indicateurs = session.query(Indicateur.indicateur).all()
         return sorted([indicateur[0] for indicateur in indicateurs])  # Liste triée
     except Exception as e:
-        print(f"Erreur lors de la récupération des indicateurs : {e}")
+        print(f"Erreur lors de la récupération des indicateurs ---: {e}")
         return []
 
 from sqlalchemy import func
@@ -92,7 +118,10 @@ def get_data(filepath):
         print(f"Erreur lors du chargement du fichier CSV : {e}")
         return pd.DataFrame()  # Retourner un DataFrame vide en cas d'erreur
 
+
 # Récupérer des données depuis MySQL pour V1_indicateur
+import pandas as pd
+
 def get_data_from_mysql_V1():
     try:
         # Requête pour récupérer les données depuis V1_indicateur
@@ -102,6 +131,7 @@ def get_data_from_mysql_V1():
     except Exception as e:
         print(f"Erreur lors de la récupération des données MySQL : {e}")
         return pd.DataFrame()  # Retourner un DataFrame vide en cas d'erreur
+    
 
 # Récupérer des données depuis MySQL pour une région spécifique
 def get_data_from_mysql_VR(region_name):
@@ -141,29 +171,7 @@ def insert_data_from_excel(file_path):
         
         
 
-#Importer le fichier  excel _______________________________Excel
-def index_data_from_excel():
-    # Lire le fichier Excel
-    data = pd.read_excel('lexique.xlsx')
-    # Vérifie si les données sont récupérées correctement
-    if data.empty:
-        print("Aucune donnée récupérée du fichier Excel.")
-    else:
-        print(f"{len(data)} lignes récupérées depuis Excel.")
-    # Nettoyer les données (remplacer les NaN par des chaînes vides)
-    data = data.fillna('')
-    # Convertir toutes les valeurs en minuscules
-    data = data.applymap(lambda x: x.lower() if isinstance(x, str) else x)
-    # Indexer chaque ligne du fichier Excel
-    for _, row in data.iterrows():
-        document = row.to_dict()  # Convertir la ligne en dictionnaire
-        print("Document à indexer:", document)  # Debug: affiche le document
-        # Essayer d'indexer le document
-        try:
-            print(f"Indexing: {document}")
-        except Exception as e:
-            print(f"Erreur d'indexation pour le document {document}: {e}")
-    print("Données indexées avec succès.")
+
     
     
 import random

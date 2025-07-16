@@ -1,17 +1,14 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file, jsonify,abort
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
-
 import os
 import logging
 import pandas as pd
-
 import urllib
 from io import StringIO
 from datetime import datetime
 from unidecode import unidecode
 import sys
-import os
 from itertools import chain
 import my_queries as qr
 import config as cf
@@ -228,9 +225,10 @@ def search_indicatorsR():
 @app.route('/search_indicators2/<path:indicateur>') 
 def request_indicateur2(indicateur):
     # Charger les données depuis MySQL
-    df= qr.get_data_from_mysql_V1()
+    
     indicateur_SELECT = urllib.parse.unquote(indicateur)
     definitions=None
+    df= qr.get_data_from_mysql_V1()
     # Obtenir les options pour chaque filtre (indicateur, région, etc.
     df_filtered = pd.DataFrame()
     df_filtered =df

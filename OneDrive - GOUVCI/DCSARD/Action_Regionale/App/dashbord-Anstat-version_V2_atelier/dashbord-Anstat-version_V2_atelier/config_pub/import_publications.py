@@ -110,8 +110,6 @@ def load_publications_from_db(region=None):
                 'Nom_fichier_image': image_filename
             }
             publications[title_key] = publication_data
-
-        print("[INFO] Chargement des publications terminé.")
         return publications
     except Exception as e:
         print(f"[ERROR] Erreur lors du chargement des publications : {e}")
@@ -119,7 +117,7 @@ def load_publications_from_db(region=None):
     finally:
         if 'connection' in locals() and connection.open:
             connection.close()
-            print("[INFO] Connexion à la base de données fermée.")
+            print("Publication: Connexion à la base de données fermée .")
 
 def get_regions():
     try:
