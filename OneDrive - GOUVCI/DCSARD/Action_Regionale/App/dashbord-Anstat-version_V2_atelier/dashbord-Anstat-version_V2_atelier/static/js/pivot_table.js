@@ -101,20 +101,20 @@ function togglePlaceholders() {
 function sendColumnsToServer() {
     offset = 0;
     hasMoreData = true;
-    tableData = [];
+    tableData = []; // Réinitialisez tableData à chaque nouveau jeu de colonnes
     filteredTableData = [];
     tableContainer.innerHTML = '';
-    loadData(offset, limit);
+    loadData(offset, limit, true); // <--- Passer un paramètre pour indiquer un chargement initial
 }
 
-function loadData(offset, limit) {
+function loadData(offset, limit, isInitialLoad = false) { // <--- Ajouter un paramètre isInitialLoad
     if (isLoading || !hasMoreData) {
         console.log('Load ignored: isLoading=', isLoading, 'hasMoreData=', hasMoreData);
         return;
     }
     isLoading = true;
     console.log('Fetching data: offset=', offset, 'limit=', limit);
-    
+
     fetch('/process_columns?offset=' + offset + '&limit=' + limit, {
         method: 'POST',
         headers: {
@@ -140,21 +140,42 @@ function loadData(offset, limit) {
         if (data.data.length < limit) {
             hasMoreData = false;
         }
-        tableData = tableData.concat(data.data.map(row => {
+
+        const newRows = data.data.map(row => {
             const rowData = {};
             data.columns.forEach((col, index) => {
                 rowData[col.join(' ')] = row[index];
             });
             return rowData;
-        }));
-        tableData.columns = data.columns;
-        filteredTableData = tableData;
-        if (offset === 0) {
-            generateTable(data);
-        } else {
-            appendRows(data);
+        });
+
+        // Concaténez les nouvelles données à tableData (toutes les données brutes)
+        tableData = tableData.concat(newRows);
+        // Stockez les colonnes une fois
+        if (!tableData.columns) {
+            tableData.columns = data.columns;
         }
-        generateFilters();
+
+        // Appliquez les filtres existants aux données *actuellement chargées*
+        // Ceci est crucial pour que les nouvelles données soient filtrées avec les critères actuels
+        applyFilters();
+
+        // Générez les filtres UNIQUEMENT lors du chargement initial (offset === 0 ou isInitialLoad)
+        if (isInitialLoad) {
+            generateFilters();
+        }
+
+        // Régénérez le tableau affiché avec les données *filtrées*
+        // Cela garantit que toutes les lignes, nouvelles et anciennes,
+        // sont affichées correctement et que la fusion des cellules est appliquée.
+        generateTable({
+            columns: tableData.columns,
+            data: filteredTableData.map(row => {
+                // S'assurer que les données sont formatées comme un tableau pour generateTable
+                return tableData.columns.map(col => row[col.join(' ')]);
+            })
+        });
+
         isLoading = false;
     })
     .catch(error => {
@@ -168,6 +189,9 @@ function generateTable(data) {
 
     const table = document.createElement('table');
     table.id = 'data-table';
+    // Ajoutez les classes Tailwind pour le tableau : pleine largeur et bordures fusionnées
+    table.classList.add('w-full', 'border-collapse');
+
     const thead = document.createElement('thead');
     const tbody = document.createElement('tbody');
 
@@ -190,6 +214,21 @@ function generateTable(data) {
                 }
                 const th = document.createElement('th');
                 th.textContent = currentValue || '';
+
+                // --- AJOUT DES CLASSES TAILWIND UNIQUEMENT POUR FIXER L'ENTÊTE ---
+                th.classList.add(
+                    'sticky',   // Rend l'élément "collant" lors du défilement
+                    'top-0',    // Colle l'élément à 0px du haut du conteneur parent de défilement
+                    'z-10',     // Assure que l'en-tête reste au-dessus du contenu défilant
+                    // IMPORTANT : Ajoutez ici la classe de couleur de fond de votre en-tête existante,
+                    // car 'sticky' seul ne rend pas l'arrière-plan opaque.
+                    // Si vous avez une classe comme 'bg-green-700' ou 'bg-[votre-couleur-specifique]'
+                    // ajoutez-la ici, par exemple: 'bg-your-header-color'
+                    // Sans cela, le texte du tableau défilera derrière l'en-tête.
+                    // Exemple basé sur vos couleurs précédentes: 'bg-[#006B45]'
+                );
+                // ---------------------------------------------------
+
                 headerRow.appendChild(th);
                 previousValue = currentValue;
                 colspan = 1;
@@ -205,9 +244,13 @@ function generateTable(data) {
     data.data.forEach(row => {
         const tr = document.createElement('tr');
         columns.forEach((col, index) => {
-            const colKey = col.join(' ');
+            const colKey = col.join(' '); // Utilisez col.join(' ') si `row` est un objet
             const td = document.createElement('td');
-            td.textContent = row[index] || ' ';
+            td.textContent = row[index] || ' '; // Revertir à row[index] si row est un tableau, sinon utilisez row[colKey]
+
+            // Si vous avez des classes Tailwind pour les styles de base des <td>, ajoutez-les ici.
+            // Par exemple: td.classList.add('p-2', 'border', 'border-gray-300', 'text-center');
+
             tr.appendChild(td);
         });
         tbody.appendChild(tr);
@@ -218,7 +261,6 @@ function generateTable(data) {
     tableContainer.appendChild(table);
     mergeTableCells();
 }
-
 function appendRows(data) {
     const table = document.querySelector('#table-container table');
     const tbody = table.querySelector('tbody') || document.createElement('tbody');
@@ -248,56 +290,43 @@ function generateFilters() {
     filterContainer.innerHTML = '';
 
     const allRows = [...rowColumns];
-    const allColumns = [...colColumns];
-
-    console.log("Columns for filters:", allRows);
-    console.log('Columns for no filter:', allColumns);
 
     allRows.forEach(col => {
-        // Vérifier si la colonne est dans colColumns, auquel cas on ne génère pas de filtre
         if (colColumns.includes(col)) {
-            return; // Ignore les colonnes dans colColumns
+            return;
         }
 
         const colKey = Array.isArray(col) ? col.join(' ') : col;
+        // Les valeurs uniques sont tirées de tableData (toutes les données brutes)
+        // lors de la génération initiale.
         let uniqueValues = [...new Set(tableData.map(row => row[colKey]))];
-
-        // Filtrer les valeurs undefined
         uniqueValues = uniqueValues.filter(val => val !== undefined);
 
-        // Si aucune valeur unique n'est trouvée, utiliser les dernières valeurs valides
-        if (uniqueValues.length === 0) {
-            uniqueValues = lastValidValues[colKey] || ["Valeur manquante"];
-        } else {
-            // Mettre à jour les dernières valeurs valides pour cette colonne
+        if (uniqueValues.length === 0 && lastValidValues[colKey]) {
+            uniqueValues = lastValidValues[colKey];
+        } else if (uniqueValues.length > 0) {
             lastValidValues[colKey] = uniqueValues;
+        } else {
+            uniqueValues = ["Valeur manquante"];
         }
 
-        console.log(`Unique values for ${colKey}:`, uniqueValues);
-        console.log('Valeur stockées', lastValidValues);
-
-        // Créez un conteneur de filtre dépliable
         const filterGroup = document.createElement('div');
         filterGroup.classList.add('filter-group');
 
-        // Titre du filtre avec fonctionnalité de dépliage/repliage
         const filterTitle = document.createElement('div');
         filterTitle.classList.add('filter-title');
         filterTitle.innerHTML = `<span class="icon-orange">&#43;</span> Filtrer sur ${col}`;
         filterTitle.style.cursor = 'pointer';
 
-        // Conteneur des cases à cocher (initialement masqué)
         const checkboxContainer = document.createElement('div');
         checkboxContainer.classList.add('checkbox-container');
-        checkboxContainer.style.display = 'none';  // Commence replié
+        checkboxContainer.style.display = 'none';
 
-        // Ajouter l'événement de clic pour déplier/replier
         filterTitle.addEventListener('click', () => {
-            checkboxContainer.style.display = 
+            checkboxContainer.style.display =
                 checkboxContainer.style.display === 'none' ? 'block' : 'none';
         });
 
-        // Créez des cases à cocher pour chaque valeur unique, en gérant les valeurs undefined
         uniqueValues.forEach(value => {
             const checkboxWrapper = document.createElement('div');
             const checkbox = document.createElement('input');
@@ -308,19 +337,19 @@ function generateFilters() {
             const checkboxLabel = document.createElement('label');
             checkboxLabel.textContent = value;
 
-            checkbox.addEventListener('change', applyFilters);
+            checkbox.addEventListener('change', applyFilters); // Le changement de filtre appelle toujours applyFilters
 
             checkboxWrapper.appendChild(checkbox);
             checkboxWrapper.appendChild(checkboxLabel);
             checkboxContainer.appendChild(checkboxWrapper);
         });
 
-        // Ajoutez le titre et les options au groupe de filtres
         filterGroup.appendChild(filterTitle);
         filterGroup.appendChild(checkboxContainer);
         filterContainer.appendChild(filterGroup);
     });
 }
+
 
 
 
@@ -335,41 +364,45 @@ function doesRowMatchFilters(row, filters) {
     });
 }
 function applyFilters() {
-    filteredTableData = [...tableData];  // Copie de données pour appliquer les filtres
     console.log("Applying filters...");
-  
+
     const checkedCheckboxes = filterContainer.querySelectorAll('input[type="checkbox"]:checked');
     const filters = {};
-  
-    // Collecte des filtres sélectionnés
+
     checkedCheckboxes.forEach(checkbox => {
         const column = checkbox.getAttribute('data-column');
         const value = checkbox.value;
 
-        // Utilisez la clé normalisée pour les filtres
         if (!filters[column]) {
             filters[column] = [];
         }
         filters[column].push(value);
     });
 
-    // Application des filtres en utilisant `doesRowMatchFilters`
-    filteredTableData = filteredTableData.filter(row => doesRowMatchFilters(row, filters));
+    // Appliquez les filtres sur la totalité de `tableData` (qui contient toutes les données chargées)
+    if (Object.keys(filters).length === 0) {
+        filteredTableData = [...tableData]; // Si aucun filtre n'est sélectionné, utilisez toutes les données brutes
+    } else {
+        filteredTableData = tableData.filter(row => doesRowMatchFilters(row, filters));
+    }
 
     console.log('tableau obtenir', filteredTableData);
 
-    // Regénérer le tableau avec les données filtrées
-    generateTable({
-        columns: tableData.columns,
-        data: filteredTableData.map(row => {
-            return tableData.columns.map(col => {
-                const key = Array.isArray(col) ? col.join(' ') : col;  // Utilisez la clé normalisée
-                return row[key];
-            });
-        })
-    });
+    // Regénérer le tableau avec les données filtrées.
+    // Il est crucial d'appeler generateTable ici pour refléter les filtres
+    // sur les données déjà chargées ET les nouvelles données.
+    if (tableData.columns) { // S'assurer que les colonnes sont définies
+        generateTable({
+            columns: tableData.columns,
+            data: filteredTableData.map(row => {
+                return tableData.columns.map(col => {
+                    const key = Array.isArray(col) ? col.join(' ') : col;
+                    return row[key];
+                });
+            })
+        });
+    }
 }
-
 
 
 
