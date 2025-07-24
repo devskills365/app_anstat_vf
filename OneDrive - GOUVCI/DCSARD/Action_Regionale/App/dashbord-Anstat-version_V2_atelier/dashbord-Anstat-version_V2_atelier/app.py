@@ -220,68 +220,97 @@ def search_indicatorsR():
     return render_template('search_indicateurR.html',indicateurs=indicateurs)
 
 
+from flask import jsonify, request
 
-
-@app.route('/search_indicators2/<path:indicateur>') 
-def request_indicateur2(indicateur):
+@app.route('/autocomplete', methods=['GET'])
+def autocomplete():
+    query = request.args.get('query', '').strip().lower()
+    if not query:
+        return jsonify([])
     # Charger les données depuis MySQL
-    
+    df = qr.get_data_from_mysql_V1()
+    # Vérifier que la colonne 'Indicateurs' existe
+    if 'Indicateurs' not in df.columns:
+        return jsonify([])
+    # Convertir en minuscule pour une recherche insensible à la casse
+    df['Indicateurs'] = df['Indicateurs'].astype(str).str.strip().str.lower()
+    # Filtrer les indicateurs qui contiennent le texte saisi
+    suggestions = df[df['Indicateurs'].str.contains(query, na=False)]['Indicateurs'].unique().tolist()
+    return jsonify(suggestions)
+
+
+
+
+@app.route('/search_indicators2/<path:indicateur>')
+def request_indicateur2(indicateur):
+    offset = int(request.args.get('offset', 0))
+    limit = int(request.args.get('limit', 50))
     indicateur_SELECT = urllib.parse.unquote(indicateur)
-    definitions=None
-    df= qr.get_data_from_mysql_V1()
-    # Obtenir les options pour chaque filtre (indicateur, région, etc.
-    df_filtered = pd.DataFrame()
-    df_filtered =df
-    # Appliquer le filtre si 'indicateur' existe et que la sélection d'indicateur est présente
+    definitions = None
+    mode_calcul = None
+
+    # Fetch data with pagination
+    df = qr.get_data_from_mysql_V1(offset=offset, limit=limit)
+    
+    # Initialize filtered DataFrame
+    df_filtered = df.copy()
+    
+    # Apply indicator filter
     if indicateur_SELECT and 'Indicateurs' in df_filtered.columns:
-        # Convertir la colonne 'indicateur' en chaînes de caractères
         df_filtered['Indicateurs'] = df_filtered['Indicateurs'].astype(str).str.strip().str.lower()
-        definitions=qr.definition_indicateur(indicateur_SELECT)
-        mode_calcul=qr.mode_calcul_indicateur(indicateur_SELECT)
-        
-        # Appliquer le filtre sur la colonne 'indicateur'
+        definitions = qr.definition_indicateur(indicateur_SELECT)
+        mode_calcul = qr.mode_calcul_indicateur(indicateur_SELECT)
         df_filtered = df_filtered[df_filtered['Indicateurs'] == indicateur_SELECT.strip().lower()]
-    else:
-        print("Aucun filtre appliqué sur l'indicateur")
-    # Supprimer les colonnes contenant uniquement des NaN
-    df_filtered = df_filtered.dropna(axis=1, how='all')
-    df_filtered = df_filtered.fillna('-')
+    
+    # Process data
+    df_filtered = df_filtered.dropna(axis=1, how='all').fillna('-')
     df_final = pd.DataFrame()
+    
     for _, row in df_filtered.iterrows():
-            dimension_cols = row['Dimension'].split(',')
-            category_values = row['Modalites'].split('/')
-            dimension_cols = [col.strip() for col in dimension_cols]
-            category_values = [value.strip() for value in category_values]
-            dimension_dict = dict(zip(dimension_cols, category_values))
-            temp_row = pd.Series(dimension_dict)
-            temp_row['Indicateurs'] = row['Indicateurs']
-            temp_row["Valeur"] = row["Valeur"]
-            temp_row["Annee"] = row["Annee"]
-            cle_pivot_table = ",".join(dimension_cols) + ",Annee"
-            temp_row["cle_pivot_table"] = cle_pivot_table
-            # Ajouter cette ligne nettoyée au DataFrame final
-            df_final = pd.concat([df_final, temp_row.to_frame().T], ignore_index=True)
-            
+        dimension_cols = row['Dimension'].split(',')
+        category_values = row['Modalites'].split('/')
+        dimension_cols = [col.strip() for col in dimension_cols]
+        category_values = [value.strip() for value in category_values]
+        dimension_dict = dict(zip(dimension_cols, category_values))
+        temp_row = pd.Series(dimension_dict)
+        temp_row['Indicateurs'] = row['Indicateurs']
+        temp_row['Valeur'] = row['Valeur']
+        temp_row['Annee'] = row['Annee']
+        cle_pivot_table = ",".join(dimension_cols) + ",Annee"
+        temp_row['cle_pivot_table'] = cle_pivot_table
+        df_final = pd.concat([df_final, temp_row.to_frame().T], ignore_index=True)
+    
     df_filtered = df_final.dropna(axis=1, how='all')
+    
+    # If no data, render no_data.html
     if df_filtered.empty:
-            return render_template('no_data.html')  # Rediriger vers la page 'Aucune donnée disponible'
-    # Stocker le DataFrame filtré dans la session pour une utilisation ultérieure
-    df_filtered_json = df_filtered.to_json(orient='split')  # Convertir en JSON pour le stockage
+        return render_template('no_data.html')
+    
+    # If JSON format is requested (for AJAX), return JSON
+    if request.args.get('format') == 'json':
+        return jsonify({
+            'data': df_filtered.to_dict(orient='records'),
+            'definitions': definitions,
+            'mode_calcul': mode_calcul
+        })
+    
+    # Store initial filtered DataFrame in session (optional, if needed elsewhere)
+    df_filtered_json = df_filtered.to_json(orient='split')
     session['df_filtered'] = df_filtered_json
-    # Obtenir les colonnes valables pour les désagrégations
+    
+    # Get columns for desaggregation
     existing_columns = df_filtered.columns.tolist()
-    columns_to_exclude = ['Valeur', 'Indicateurs','cle_pivot_table']
+    columns_to_exclude = ['Valeur', 'Indicateurs', 'cle_pivot_table']
     desaggregation_columns = [col for col in existing_columns if col not in columns_to_exclude]
+    
     return render_template(
         'result.html',
         definitions=definitions,
         mode_calcul=mode_calcul,
-        colonne_valable=desaggregation_columns,  # Colonnes à utiliser pour désagréger les données
-        indicateur2=indicateur_SELECT,  # Indicateur sélectionné
-        df_filtered=df_filtered_json  # Data JSON pour le filtrage
+        colonne_valable=desaggregation_columns,
+        indicateur2=indicateur_SELECT,
+        df_filtered=df_filtered_json
     )
-
-
 # Accès spécefique à une région
 @app.route('/search_indicatorsR/<path:indicateur>') 
 def request_indicateurR(indicateur):
@@ -343,108 +372,9 @@ def request_indicateurR(indicateur):
     )
 
 #----------------Autocomplétion
-from flask import jsonify, request
-
-@app.route('/autocomplete', methods=['GET'])
-def autocomplete():
-    query = request.args.get('query', '').strip().lower()
-    if not query:
-        return jsonify([])
-    # Charger les données depuis MySQL
-    df = qr.get_data_from_mysql_V1()
-    # Vérifier que la colonne 'Indicateurs' existe
-    if 'Indicateurs' not in df.columns:
-        return jsonify([])
-    # Convertir en minuscule pour une recherche insensible à la casse
-    df['Indicateurs'] = df['Indicateurs'].astype(str).str.strip().str.lower()
-    # Filtrer les indicateurs qui contiennent le texte saisi
-    suggestions = df[df['Indicateurs'].str.contains(query, na=False)]['Indicateurs'].unique().tolist()
-    return jsonify(suggestions)
 
 
 
-
-
-
-
-
-"""
-Cette fonction a pour rôle de permet le charger des données des requêtes
-Aussi cette partie est dedié dans les requêtes utilisatrices.
-Toutes les fonctions pour la requêtes sont écrites ici.
-"""
-
-
-
-@app.route('/request_indicateur', methods=['GET', 'POST'])
-def request_indicateur():
-    # Charger les données depuis MySQL
-    data_mysql = qr.get_data_from_mysql_V1()
-    # Obtenir les options pour chaque filtre (indicateur, région, etc.)
-    indicateurs_options = qr.options_indicateur()
-    indicateur_SELECT = None
-    df_filtered = pd.DataFrame()
-    definitions = None
-    mode_calcul = None
-    if request.method == 'GET':
-        indicateur_SELECT = request.args.get('indicateur_elastic')
-        df_filtered = data_mysql
-        print('indicateur pris:',indicateur_SELECT)
-        
-        if indicateur_SELECT and 'Indicateurs' in df_filtered.columns:
-            try:
-                definitions = qr.definition_indicateur(indicateur_SELECT)
-                mode_calcul = qr.mode_calcul_indicateur(indicateur_SELECT)
-                
-                df_filtered['Indicateurs'] = df_filtered['Indicateurs'].astype(str).str.strip().str.lower()
-                df_filtered = df_filtered[df_filtered['Indicateurs'] == indicateur_SELECT.strip().lower()]
-                
-                if df_filtered.empty:
-                    return render_template('no_data.html')  # Rediriger vers la page 'Aucune donnée disponible'
-                    
-            except Exception as e:
-                print(f"Erreur lors de la récupération de l'indicateur: {e}")
-                definitions = "Indicateur non disponible"
-                mode_calcul = "Non défini"
-        
-        df_final = pd.DataFrame()
-        df_filtered = df_filtered.fillna('-')
-        for _, row in df_filtered.iterrows():
-            dimension_cols = row['Dimension'].split(',')
-            category_values = row['Modalites'].split('/')
-            dimension_cols = [col.strip() for col in dimension_cols]
-            category_values = [value.strip() for value in category_values]
-            dimension_dict = dict(zip(dimension_cols, category_values))
-            temp_row = pd.Series(dimension_dict)
-            temp_row['Indicateurs'] = row['Indicateurs']
-            temp_row["Valeur"] = row["Valeur"]
-            temp_row["Annee"] = row["Annee"]
-            cle_pivot_table = ",".join(dimension_cols) + ",Annee"
-            temp_row["cle_pivot_table"] = cle_pivot_table
-            df_final = pd.concat([df_final, temp_row.to_frame().T], ignore_index=True)
-        
-        df_filtered = df_final.dropna(axis=1, how='all')
-        
-        if df_filtered.empty:
-            return render_template('no_data.html')  # Rediriger vers la page 'Aucune donnée disponible'
-        
-        df_filtered_json = df_filtered.to_json(orient='split')
-        session['df_filtered'] = df_filtered_json
-        existing_columns = df_filtered.columns.tolist()
-        columns_to_exclude = ['Valeur', 'Indicateurs','cle_pivot_table']
-        desaggregation_columns = [col for col in existing_columns if col not in columns_to_exclude]
-    
-    return render_template(
-        'result.html',
-        definitions=definitions,
-        mode_calcul=mode_calcul,
-        colonne_valable=desaggregation_columns,
-        indicateurs=indicateurs_options,
-        indicateur2=indicateur_SELECT,
-        df_filtered=df_filtered_json
-    )
-
-#
     
 @app.route('/process_columns', methods=['POST'])
 def process_columns():

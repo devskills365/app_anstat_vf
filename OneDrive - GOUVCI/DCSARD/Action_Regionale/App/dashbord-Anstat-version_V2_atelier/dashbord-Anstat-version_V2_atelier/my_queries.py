@@ -67,7 +67,7 @@ def options_regions():
 def options_indicateur():
     try:
         # Récupérer les indicateurs avec SQLAlchemy
-        indicateurs = session.query(Indicateur.indicateur).all()
+        indicateurs = session.query(Indicateur.nom_indicateur).all()
         return sorted([indicateur[0] for indicateur in indicateurs])  # Liste triée
     except Exception as e:
         print(f"Erreur lors de la récupération des indicateurs ---: {e}")
@@ -122,16 +122,21 @@ def get_data(filepath):
 # Récupérer des données depuis MySQL pour V1_indicateur
 import pandas as pd
 
-def get_data_from_mysql_V1():
+def get_data_from_mysql_V1(offset=0, limit=25):
     try:
-        # Requête pour récupérer les données depuis V1_indicateur
-        query = session.query(V1Indicateur.Dimension, V1Indicateur.Modalites, V1Indicateur.Indicateurs, V1Indicateur.Annee, V1Indicateur.Valeur)
+        query = session.query(
+            V1Indicateur.Dimension,
+            V1Indicateur.Modalites,
+            V1Indicateur.Indicateurs,
+            V1Indicateur.Annee,
+            V1Indicateur.Valeur
+        ).offset(offset).limit(limit)
+        
         df = pd.read_sql(query.statement, engine)
         return df
     except Exception as e:
         print(f"Erreur lors de la récupération des données MySQL : {e}")
-        return pd.DataFrame()  # Retourner un DataFrame vide en cas d'erreur
-    
+        return pd.DataFrame()
 
 # Récupérer des données depuis MySQL pour une région spécifique
 def get_data_from_mysql_VR(region_name):

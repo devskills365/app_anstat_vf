@@ -5,10 +5,14 @@ const initialList = document.getElementById('initial-list');
 const tableContainer = document.getElementById('table-container');
 const filterContainer = document.getElementById('filter-container');
 
-let rowColumns = [];
-let colColumns = [];
+let offset = 0;
+const limit = 25;
+let isLoading = false;
+let hasMoreData = true;
 let tableData = [];
 let filteredTableData = [];
+let rowColumns = [];
+let colColumns = [];
 
 draggableItems.forEach(item => {
     item.addEventListener('dragstart', handleDragStart);
@@ -25,7 +29,7 @@ initialList.addEventListener('drop', event => handleDrop(event, 'initial'));
 
 function handleDragStart(event) {
     event.dataTransfer.setData('text/plain', event.target.dataset.column);
-    event.dataTransfer.setData('source-id', event.target.id); // Ajoute l'ID pour identifier l'origine
+    event.dataTransfer.setData('source-id', event.target.id);
 }
 
 function handleDragOver(event) {
@@ -40,19 +44,16 @@ function handleDrop(event, type) {
 
     if (!draggedElement) return;
 
-    // Supprimer l'élément de sa zone d'origine
     if (draggedElement.parentElement) {
         draggedElement.parentElement.removeChild(draggedElement);
     }
 
-    // Retirer des tableaux rowColumns ou colColumns si nécessaire
     if (rowColumns.includes(column)) {
         rowColumns.splice(rowColumns.indexOf(column), 1);
     } else if (colColumns.includes(column)) {
         colColumns.splice(colColumns.indexOf(column), 1);
     }
 
-    // Ajouter à la nouvelle zone
     if (type === 'row' && !rowColumns.includes(column)) {
         rowColumns.push(column);
         addColumnToArea(column, droppableAreaRows, rowColumns, type);
@@ -63,9 +64,7 @@ function handleDrop(event, type) {
         addColumnToArea(column, initialList, null, type);
     }
 
-    // Cacher les placeholders si des éléments sont présents
     togglePlaceholders();
-
     sendColumnsToServer();
 }
 
@@ -75,10 +74,9 @@ function addColumnToArea(column, area, columnList, type) {
     newItem.textContent = column;
     newItem.setAttribute('draggable', 'true');
     newItem.setAttribute('data-column', column);
-    newItem.id = `drag-${column}-${Date.now()}`; // ID unique pour éviter les conflits
+    newItem.id = `drag-${column}-${Date.now()}`;
     newItem.addEventListener('dragstart', handleDragStart);
 
-    // Supprimer l'élément au clic (sauf dans initial-list)
     if (type !== 'initial') {
         newItem.addEventListener('click', function () {
             area.removeChild(newItem);
@@ -101,7 +99,23 @@ function togglePlaceholders() {
 }
 
 function sendColumnsToServer() {
-    fetch('/process_columns', {
+    offset = 0;
+    hasMoreData = true;
+    tableData = [];
+    filteredTableData = [];
+    tableContainer.innerHTML = '';
+    loadData(offset, limit);
+}
+
+function loadData(offset, limit) {
+    if (isLoading || !hasMoreData) {
+        console.log('Load ignored: isLoading=', isLoading, 'hasMoreData=', hasMoreData);
+        return;
+    }
+    isLoading = true;
+    console.log('Fetching data: offset=', offset, 'limit=', limit);
+    
+    fetch('/process_columns?offset=' + offset + '&limit=' + limit, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -112,31 +126,48 @@ function sendColumnsToServer() {
             value_column: 'Valeur'
         })
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) throw new Error('Erreur réseau: ' + response.status);
+        return response.json();
+    })
     .then(data => {
-        tableData = data.data.map(row => {
+        if (data.error) {
+            console.error('Server error:', data.error);
+            isLoading = false;
+            return;
+        }
+        console.log('Received rows:', data.data.length, 'total_rows:', data.total_rows);
+        if (data.data.length < limit) {
+            hasMoreData = false;
+        }
+        tableData = tableData.concat(data.data.map(row => {
             const rowData = {};
             data.columns.forEach((col, index) => {
                 rowData[col.join(' ')] = row[index];
             });
             return rowData;
-        });
-
+        }));
         tableData.columns = data.columns;
         filteredTableData = tableData;
-        generateTable(data);
+        if (offset === 0) {
+            generateTable(data);
+        } else {
+            appendRows(data);
+        }
         generateFilters();
+        isLoading = false;
     })
-    .catch(error => console.error('Erreur:', error));
+    .catch(error => {
+        console.error('Erreur:', error);
+        isLoading = false;
+    });
 }
-
-// Le reste des fonctions (generateTable, generateFilters, applyFilters, etc.) reste inchangé
-// Assurez-vous d'inclure ces fonctions dans votre fichier JS si elles ne sont pas déjà présentes
 
 function generateTable(data) {
     tableContainer.innerHTML = '';
 
     const table = document.createElement('table');
+    table.id = 'data-table';
     const thead = document.createElement('thead');
     const tbody = document.createElement('tbody');
 
@@ -154,7 +185,7 @@ function generateTable(data) {
             if (currentValue === previousValue) {
                 colspan += 1;
             } else {
-                if (colspan > 0) {
+                if (colspan > 1) {
                     headerRow.lastChild.setAttribute('colspan', colspan);
                 }
                 const th = document.createElement('th');
@@ -185,11 +216,31 @@ function generateTable(data) {
     table.appendChild(thead);
     table.appendChild(tbody);
     tableContainer.appendChild(table);
+    mergeTableCells();
 }
 
-// Ajoutez ici les autres fonctions (generateFilters, applyFilters, etc.) si elles ne sont pas déjà incluses
+function appendRows(data) {
+    const table = document.querySelector('#table-container table');
+    const tbody = table.querySelector('tbody') || document.createElement('tbody');
+    
+    data.data.forEach(row => {
+        const tr = document.createElement('tr');
+        data.columns.forEach((col, index) => {
+            const colKey = col.join(' ');
+            const td = document.createElement('td');
+            td.textContent = row[index] || ' ';
+            tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+    });
+    
+    if (!table.querySelector('tbody')) {
+        table.appendChild(tbody);
+    }
+    mergeTableCells();
+}
 
-
+// Keep existing functions: generateFilters, applyFilters, mergeTableCells, downloadXLSX, downloadCSV, downloadPDF
 // Déclaration de lastValidValues en dehors de la fonction pour conserver les valeurs
 const lastValidValues = {}; // Stockage des dernières valeurs valides par colonne
 
@@ -557,3 +608,19 @@ function downloadPDF() {
 
 
 
+// Dans pivot_table.js, ajoutez des logs dans l'écouteur de défilement
+tableContainer.addEventListener('scroll', function () {
+    console.log('Scroll event triggered');
+    console.log('scrollTop:', tableContainer.scrollTop, 
+                'clientHeight:', tableContainer.clientHeight, 
+                'scrollHeight:', tableContainer.scrollHeight);
+    if (isLoading || !hasMoreData) {
+        console.log('Scroll ignored: isLoading=', isLoading, 'hasMoreData=', hasMoreData);
+        return;
+    }
+    if (tableContainer.scrollTop + tableContainer.clientHeight >= tableContainer.scrollHeight - 25) {
+        console.log('Loading more data: offset=', offset + limit);
+        offset += limit;
+        loadData(offset, limit);
+    }
+});

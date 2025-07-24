@@ -31,10 +31,33 @@
         }
         .suggestions-list div { padding: 8px; cursor: pointer; }
         .suggestions-list div:hover { background: #d9e6db; color: #49655A; }
-        #tableauPop { width: 100%; border-collapse: collapse; overflow-x: auto; display: block; white-space: nowrap; }
-        #tableauPop th, #tableauPop td { border: 1px solid #49655A; padding: 8px; text-align: center; min-width: 100px; }
-        #tableauPop th { background-color: #49655A; color: white; }
-        .colonne canvas { width: 100% !important; height: 100% !important; }
+          #tableauPop {
+      width: 100%;
+      border-collapse: collapse;
+      overflow-x: auto;
+      display: block;
+      white-space: nowrap;
+    }
+         #tableauPop th,
+    #tableauPop td {
+      border: 1px solid #49655a;
+      padding: 8px;
+      text-align: center;
+      min-width: 100px;
+    }
+    #tableauPop th {
+      background-color: #49655a;
+      color: white;
+    }
+          .colonne canvas {
+      width: 80% !important;
+      height: 95% !important;
+      max-width: 430px;
+      max-height: 315px;
+      display: block;
+      margin: 0 auto;
+      background: transparent;
+    }
     </style>
 </head>
 <body class="bg-gray-100">
