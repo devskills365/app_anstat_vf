@@ -6,13 +6,17 @@ const tableContainer = document.getElementById('table-container');
 const filterContainer = document.getElementById('filter-container');
 
 let offset = 0;
-const limit = 25;
+const limit = 50;
 let isLoading = false;
 let hasMoreData = true;
 let tableData = [];
 let filteredTableData = [];
 let rowColumns = [];
 let colColumns = [];
+
+// Obtenez le nom de l'indicateur depuis l'URL actuelle
+const pathArray = window.location.pathname.split('/');
+const indicateur_name = decodeURIComponent(pathArray[pathArray.length - 1]);
 
 draggableItems.forEach(item => {
     item.addEventListener('dragstart', handleDragStart);
@@ -101,13 +105,13 @@ function togglePlaceholders() {
 function sendColumnsToServer() {
     offset = 0;
     hasMoreData = true;
-    tableData = []; // Réinitialisez tableData à chaque nouveau jeu de colonnes
+    tableData = []; 
     filteredTableData = [];
     tableContainer.innerHTML = '';
-    loadData(offset, limit, true); // <--- Passer un paramètre pour indiquer un chargement initial
+    loadData(offset, limit, true);
 }
 
-function loadData(offset, limit, isInitialLoad = false) { // <--- Ajouter un paramètre isInitialLoad
+function loadData(offset, limit, isInitialLoad = false) {
     if (isLoading || !hasMoreData) {
         console.log('Load ignored: isLoading=', isLoading, 'hasMoreData=', hasMoreData);
         return;
@@ -123,7 +127,8 @@ function loadData(offset, limit, isInitialLoad = false) { // <--- Ajouter un par
         body: JSON.stringify({
             row_columns: rowColumns,
             col_columns: colColumns,
-            value_column: 'Valeur'
+            value_column: 'Valeur',
+            indicateur_name: indicateur_name
         })
     })
     .then(response => {
@@ -136,11 +141,13 @@ function loadData(offset, limit, isInitialLoad = false) { // <--- Ajouter un par
             isLoading = false;
             return;
         }
-        console.log('Received rows:', data.data.length, 'total_rows:', data.total_rows);
-        if (data.data.length < limit) {
+        
+        if (data.data.length === 0) {
             hasMoreData = false;
+        } else {
+            hasMoreData = true;
         }
-
+        
         const newRows = data.data.map(row => {
             const rowData = {};
             data.columns.forEach((col, index) => {
@@ -149,32 +156,31 @@ function loadData(offset, limit, isInitialLoad = false) { // <--- Ajouter un par
             return rowData;
         });
 
-        // Concaténez les nouvelles données à tableData (toutes les données brutes)
         tableData = tableData.concat(newRows);
-        // Stockez les colonnes une fois
-        if (!tableData.columns) {
-            tableData.columns = data.columns;
-        }
-
-        // Appliquez les filtres existants aux données *actuellement chargées*
-        // Ceci est crucial pour que les nouvelles données soient filtrées avec les critères actuels
-        applyFilters();
-
-        // Générez les filtres UNIQUEMENT lors du chargement initial (offset === 0 ou isInitialLoad)
+        
         if (isInitialLoad) {
+            if (!tableData.columns) {
+                tableData.columns = data.columns;
+            }
+            applyFilters();
             generateFilters();
+            generateTable({
+                columns: tableData.columns,
+                data: filteredTableData.map(row => {
+                    return tableData.columns.map(col => row[col.join(' ')]);
+                })
+            });
+        } else {
+            // Chargements suivants : ajouter de nouvelles lignes
+            const newFilteredRows = newRows.filter(row => doesRowMatchFilters(row, getActiveFilters()));
+            appendRows({
+                columns: data.columns,
+                data: newFilteredRows.map(row => {
+                     return data.columns.map(col => row[col.join(' ')]);
+                })
+            });
+            mergeTableCells(); // <-- Ajout de l'appel pour fusionner les cellules après l'ajout
         }
-
-        // Régénérez le tableau affiché avec les données *filtrées*
-        // Cela garantit que toutes les lignes, nouvelles et anciennes,
-        // sont affichées correctement et que la fusion des cellules est appliquée.
-        generateTable({
-            columns: tableData.columns,
-            data: filteredTableData.map(row => {
-                // S'assurer que les données sont formatées comme un tableau pour generateTable
-                return tableData.columns.map(col => row[col.join(' ')]);
-            })
-        });
 
         isLoading = false;
     })
@@ -184,12 +190,26 @@ function loadData(offset, limit, isInitialLoad = false) { // <--- Ajouter un par
     });
 }
 
+// Fonction pour récupérer les filtres actifs, nécessaire pour la nouvelle logique
+function getActiveFilters() {
+    const filters = {};
+    const checkedCheckboxes = filterContainer.querySelectorAll('input[type="checkbox"]:checked');
+    checkedCheckboxes.forEach(checkbox => {
+        const column = checkbox.getAttribute('data-column');
+        const value = checkbox.value;
+        if (!filters[column]) {
+            filters[column] = [];
+        }
+        filters[column].push(value);
+    });
+    return filters;
+}
+
 function generateTable(data) {
     tableContainer.innerHTML = '';
 
     const table = document.createElement('table');
     table.id = 'data-table';
-    // Ajoutez les classes Tailwind pour le tableau : pleine largeur et bordures fusionnées
     table.classList.add('w-full', 'border-collapse');
 
     const thead = document.createElement('thead');
@@ -204,30 +224,23 @@ function generateTable(data) {
         let colspan = 0;
 
         columns.forEach((col, index) => {
-            const currentValue = col[level];
+    const currentValue = col[level];
 
-            if (currentValue === previousValue) {
-                colspan += 1;
-            } else {
+    if (currentValue === previousValue) {
+        return; // <-- Correct ! Passe à l'itération suivante.
+    } else {
                 if (colspan > 1) {
                     headerRow.lastChild.setAttribute('colspan', colspan);
                 }
                 const th = document.createElement('th');
                 th.textContent = currentValue || '';
 
-                // --- AJOUT DES CLASSES TAILWIND UNIQUEMENT POUR FIXER L'ENTÊTE ---
                 th.classList.add(
-                    'sticky',   // Rend l'élément "collant" lors du défilement
-                    'top-0',    // Colle l'élément à 0px du haut du conteneur parent de défilement
-                    'z-10',     // Assure que l'en-tête reste au-dessus du contenu défilant
-                    // IMPORTANT : Ajoutez ici la classe de couleur de fond de votre en-tête existante,
-                    // car 'sticky' seul ne rend pas l'arrière-plan opaque.
-                    // Si vous avez une classe comme 'bg-green-700' ou 'bg-[votre-couleur-specifique]'
-                    // ajoutez-la ici, par exemple: 'bg-your-header-color'
-                    // Sans cela, le texte du tableau défilera derrière l'en-tête.
-                    // Exemple basé sur vos couleurs précédentes: 'bg-[#006B45]'
+                    'sticky',
+                    'top-0',
+                    'z-10',
+                    'bg-[#006B45]'
                 );
-                // ---------------------------------------------------
 
                 headerRow.appendChild(th);
                 previousValue = currentValue;
@@ -244,13 +257,8 @@ function generateTable(data) {
     data.data.forEach(row => {
         const tr = document.createElement('tr');
         columns.forEach((col, index) => {
-            const colKey = col.join(' '); // Utilisez col.join(' ') si `row` est un objet
             const td = document.createElement('td');
-            td.textContent = row[index] || ' '; // Revertir à row[index] si row est un tableau, sinon utilisez row[colKey]
-
-            // Si vous avez des classes Tailwind pour les styles de base des <td>, ajoutez-les ici.
-            // Par exemple: td.classList.add('p-2', 'border', 'border-gray-300', 'text-center');
-
+            td.textContent = row[index] || ' ';
             tr.appendChild(td);
         });
         tbody.appendChild(tr);
@@ -261,6 +269,7 @@ function generateTable(data) {
     tableContainer.appendChild(table);
     mergeTableCells();
 }
+
 function appendRows(data) {
     const table = document.querySelector('#table-container table');
     const tbody = table.querySelector('tbody') || document.createElement('tbody');
@@ -268,7 +277,6 @@ function appendRows(data) {
     data.data.forEach(row => {
         const tr = document.createElement('tr');
         data.columns.forEach((col, index) => {
-            const colKey = col.join(' ');
             const td = document.createElement('td');
             td.textContent = row[index] || ' ';
             tr.appendChild(td);
@@ -282,9 +290,7 @@ function appendRows(data) {
     mergeTableCells();
 }
 
-// Keep existing functions: generateFilters, applyFilters, mergeTableCells, downloadXLSX, downloadCSV, downloadPDF
-// Déclaration de lastValidValues en dehors de la fonction pour conserver les valeurs
-const lastValidValues = {}; // Stockage des dernières valeurs valides par colonne
+const lastValidValues = {};
 
 function generateFilters() {
     filterContainer.innerHTML = '';
@@ -297,8 +303,6 @@ function generateFilters() {
         }
 
         const colKey = Array.isArray(col) ? col.join(' ') : col;
-        // Les valeurs uniques sont tirées de tableData (toutes les données brutes)
-        // lors de la génération initiale.
         let uniqueValues = [...new Set(tableData.map(row => row[colKey]))];
         uniqueValues = uniqueValues.filter(val => val !== undefined);
 
@@ -337,7 +341,7 @@ function generateFilters() {
             const checkboxLabel = document.createElement('label');
             checkboxLabel.textContent = value;
 
-            checkbox.addEventListener('change', applyFilters); // Le changement de filtre appelle toujours applyFilters
+            checkbox.addEventListener('change', applyFilters);
 
             checkboxWrapper.appendChild(checkbox);
             checkboxWrapper.appendChild(checkboxLabel);
@@ -350,16 +354,9 @@ function generateFilters() {
     });
 }
 
-
-
-
-
 function doesRowMatchFilters(row, filters) {
-    // Pour chaque clé de filtre, vérifiez si la ligne contient une valeur correspondante
     return Object.keys(filters).every(column => {
         const filterValues = filters[column];
-        
-        // Vérifiez toutes les valeurs de la ligne qui pourraient correspondre à la colonne filtrée
         return Object.values(row).some(rowValue => filterValues.includes(rowValue));
     });
 }
@@ -379,19 +376,15 @@ function applyFilters() {
         filters[column].push(value);
     });
 
-    // Appliquez les filtres sur la totalité de `tableData` (qui contient toutes les données chargées)
     if (Object.keys(filters).length === 0) {
-        filteredTableData = [...tableData]; // Si aucun filtre n'est sélectionné, utilisez toutes les données brutes
+        filteredTableData = [...tableData];
     } else {
         filteredTableData = tableData.filter(row => doesRowMatchFilters(row, filters));
     }
 
     console.log('tableau obtenir', filteredTableData);
 
-    // Regénérer le tableau avec les données filtrées.
-    // Il est crucial d'appeler generateTable ici pour refléter les filtres
-    // sur les données déjà chargées ET les nouvelles données.
-    if (tableData.columns) { // S'assurer que les colonnes sont définies
+    if (tableData.columns) {
         generateTable({
             columns: tableData.columns,
             data: filteredTableData.map(row => {
@@ -403,10 +396,6 @@ function applyFilters() {
         });
     }
 }
-
-
-
-
 
 function mergeTableCells() {
     const table = document.querySelector('#table-container table');
@@ -435,12 +424,9 @@ function mergeTableCells() {
     }
 }
 
-// Ajouter des écouteurs d'événements pour les boutons de téléchargement
 document.getElementById('download-xlsx').addEventListener('click', downloadXLSX);
 document.getElementById('download-csv').addEventListener('click', downloadCSV);
 document.getElementById('download-pdf').addEventListener('click', downloadPDF);
-
-
 
 function downloadXLSX() {
     if (!filteredTableData || filteredTableData.length === 0) {
@@ -450,13 +436,10 @@ function downloadXLSX() {
 
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet([]);
-
-    // Ajouter les en-têtes avec fusion
-    const columns = tableData.columns; // Les colonnes hiérarchiques
+    const columns = tableData.columns;
     const levels = columns.length > 0 ? columns[0].length : 0;
-
-    let rowOffset = 0; // Pour suivre l'offset des lignes
-    ws['!merges'] = []; // Initialiser les fusions
+    let rowOffset = 0;
+    ws['!merges'] = [];
 
     for (let level = 0; level < levels; level++) {
         const headerRow = [];
@@ -467,10 +450,8 @@ function downloadXLSX() {
             const currentValue = col[level];
 
             if (currentValue === previousValue) {
-                // Continue la fusion pour les valeurs identiques
                 return;
             } else {
-                // Si une valeur change, ajouter une fusion si nécessaire
                 if (previousValue !== null && index - colspanStartIndex > 1) {
                     ws['!merges'].push({
                         s: { r: rowOffset, c: colspanStartIndex },
@@ -478,13 +459,11 @@ function downloadXLSX() {
                     });
                 }
 
-                // Ajouter la valeur actuelle et mettre à jour les indices
                 headerRow.push(currentValue || '');
                 previousValue = currentValue;
                 colspanStartIndex = index;
             }
 
-            // Dernière cellule de la ligne
             if (index === columns.length - 1 && index - colspanStartIndex > 0) {
                 ws['!merges'].push({
                     s: { r: rowOffset, c: colspanStartIndex },
@@ -493,12 +472,10 @@ function downloadXLSX() {
             }
         });
 
-        // Ajouter la ligne d'en-têtes au tableau
         XLSX.utils.sheet_add_aoa(ws, [headerRow], { origin: rowOffset });
         rowOffset++;
     }
 
-    // Ajouter les données du tableau
     filteredTableData.forEach(row => {
         const rowData = tableData.columns.map(col => {
             const key = Array.isArray(col) ? col.join(' ') : col;
@@ -509,58 +486,43 @@ function downloadXLSX() {
         rowOffset++;
     });
 
-    // Ajouter la feuille de calcul au classeur
     XLSX.utils.book_append_sheet(wb, ws, 'Data');
-
-    // Télécharger le fichier Excel
     XLSX.writeFile(wb, 'donnees_filtrees.xlsx');
 }
-
 
 function downloadCSV() {
     if (!filteredTableData || filteredTableData.length === 0) {
         alert("Aucune variable sélectionnée");
         return;
     }
-
-    // Gérer les colonnes hiérarchiques
-    const columns = tableData.columns; // Colonnes hiérarchiques
+    const columns = tableData.columns;
     const levels = columns.length > 0 ? columns[0].length : 0;
-
-    // Construire les en-têtes hiérarchiques
     const headerRows = Array.from({ length: levels }, () => Array(columns.length).fill(''));
     columns.forEach((col, colIndex) => {
         col.forEach((value, levelIndex) => {
             headerRows[levelIndex][colIndex] = value || '';
         });
     });
-
-    // Ajouter les données
     const dataRows = filteredTableData.map(row =>
         columns.map(col => {
-            const key = Array.isArray(col) ? col.join(' ') : col; // Normaliser la clé de colonne
-            return row[key] || ''; // Remplace undefined par une chaîne vide
+            const key = Array.isArray(col) ? col.join(' ') : col;
+            return row[key] || '';
         })
     );
-
-    // Combiner les lignes d'en-têtes et de données pour créer le CSV
     const csvContent = [
         ...headerRows.map(row => row.map(value => {
-            // Échapper les valeurs contenant des virgules, guillemets ou nouvelles lignes
             if (typeof value === 'string' && (value.includes(',') || value.includes('"') || value.includes('\n'))) {
-                return `"${value.replace(/"/g, '""')}"`; // Échapper les guillemets
+                return `"${value.replace(/"/g, '""')}"`;
             }
             return value;
-        }).join(',')), // Ajouter chaque ligne d'en-tête
+        }).join(',')),
         ...dataRows.map(row => row.map(value => {
             if (typeof value === 'string' && (value.includes(',') || value.includes('"') || value.includes('\n'))) {
-                return `"${value.replace(/"/g, '""')}"`; // Échapper les guillemets
+                return `"${value.replace(/"/g, '""')}"`;
             }
             return value;
-        }).join(',')) // Ajouter chaque ligne de données
+        }).join(','))
     ].join('\n');
-
-    // Créer un fichier blob et déclencher le téléchargement
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -571,48 +533,33 @@ function downloadCSV() {
     document.body.removeChild(link);
 }
 
-
-
-
 function downloadPDF() {
     if (!filteredTableData || filteredTableData.length === 0) {
         alert("Aucune variable sélectionnée");
         return;
     }
     const { jsPDF } = window.jspdf;
-
-    // Calcul de la largeur totale
-    const pageWidth = 210; // Largeur d'une page A4 en mm
-    const columnWidths = tableData.columns.map(() => 30); // Largeur par défaut des colonnes
+    const pageWidth = 210;
+    const columnWidths = tableData.columns.map(() => 30);
     const totalWidth = columnWidths.reduce((sum, width) => sum + width, 0);
-
-    // Choix de l'orientation
     const orientation = totalWidth > pageWidth ? 'landscape' : 'portrait';
     const doc = new jsPDF({ orientation });
-
-    // Calcul de la largeur ajustée des colonnes
-    const availablePageWidth = orientation === 'landscape' ? 297 - 20 : 210 - 20; // Largeur en paysage ou portrait, moins les marges
+    const availablePageWidth = orientation === 'landscape' ? 297 - 20 : 210 - 20;
     const adjustedColumnWidths = columnWidths.map(width =>
         (width / totalWidth) * availablePageWidth
     );
-
-    // Titre du PDF
     const pdfTitleElement = document.getElementById('pdf-title');
     const pdfTitle = pdfTitleElement ? pdfTitleElement.textContent.trim() : 'Données Filtrées';
     doc.setFontSize(16);
     doc.text(pdfTitle, 10, 15);
-
-    // Préparer les données du tableau
     const columns = tableData.columns;
     const bodyRows = filteredTableData.map(row =>
         columns.map(col => {
             const key = Array.isArray(col) ? col.join(' ') : col;
             const value = row[key] || '';
-            return value.length > 50 ? `${value.substring(0, 47)}...` : value; // Tronquer si nécessaire
+            return value.length > 50 ? `${value.substring(0, 47)}...` : value;
         })
     );
-
-    // Générer le tableau avec autoTable
     doc.autoTable({
         startY: 25,
         head: [columns],
@@ -631,17 +578,10 @@ function downloadPDF() {
             return acc;
         }, {})
     });
-
-    // Télécharger le PDF
     const filename = orientation === 'landscape' ? 'donnees_filtrees_landscape.pdf' : 'donnees_filtrees_portrait.pdf';
     doc.save(filename);
 }
 
-
-
-
-
-// Dans pivot_table.js, ajoutez des logs dans l'écouteur de défilement
 tableContainer.addEventListener('scroll', function () {
     console.log('Scroll event triggered');
     console.log('scrollTop:', tableContainer.scrollTop, 

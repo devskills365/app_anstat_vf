@@ -228,89 +228,107 @@ def autocomplete():
     if not query:
         return jsonify([])
     # Charger les données depuis MySQL
-    df = qr.get_data_from_mysql_V1()
-    # Vérifier que la colonne 'Indicateurs' existe
-    if 'Indicateurs' not in df.columns:
-        return jsonify([])
+    df = qr.autocompletion()
     # Convertir en minuscule pour une recherche insensible à la casse
-    df['Indicateurs'] = df['Indicateurs'].astype(str).str.strip().str.lower()
+    df['nom_indicateur'] = df['nom_indicateur'].astype(str).str.strip().str.lower()
     # Filtrer les indicateurs qui contiennent le texte saisi
-    suggestions = df[df['Indicateurs'].str.contains(query, na=False)]['Indicateurs'].unique().tolist()
+    suggestions = df[df['nom_indicateur'].str.contains(query, na=False)]['nom_indicateur'].unique().tolist()
     return jsonify(suggestions)
 
 
 
 
-@app.route('/search_indicators2/<path:indicateur>')
-def request_indicateur2(indicateur):
+
+import urllib.parse
+import pandas as pd
+from flask import request, jsonify, render_template, session
+from itertools import chain
+
+@app.route('/filter_indicator/<path:indicateur>')
+def page_filtration_data(indicateur):
     offset = int(request.args.get('offset', 0))
     limit = int(request.args.get('limit', 50))
     indicateur_SELECT = urllib.parse.unquote(indicateur)
+
     definitions = None
     mode_calcul = None
 
-    # Fetch data with pagination
-    df = qr.get_data_from_mysql_V1(offset=offset, limit=limit)
+    # Récupérer les données depuis la base de données
+    df = qr.obtention_data_mysql_niveauDesagr(indicateur_name=indicateur_SELECT, offset=offset, limit=limit)
+    print(df.head())
     
-    # Initialize filtered DataFrame
-    df_filtered = df.copy()
+    df_filtered = df.copy() 
     
-    # Apply indicator filter
     if indicateur_SELECT and 'Indicateurs' in df_filtered.columns:
-        df_filtered['Indicateurs'] = df_filtered['Indicateurs'].astype(str).str.strip().str.lower()
+        df_filtered_temp = df_filtered.copy()
+        df_filtered_temp['Indicateurs_cleaned'] = df_filtered_temp['Indicateurs'].astype(str).str.strip().str.lower()
+        df_filtered = df_filtered_temp[df_filtered_temp['Indicateurs_cleaned'] == indicateur_SELECT.strip().lower()].copy()
+        if 'Indicateurs_cleaned' in df_filtered.columns:
+            df_filtered = df_filtered.drop(columns=['Indicateurs_cleaned'])
+
         definitions = qr.definition_indicateur(indicateur_SELECT)
         mode_calcul = qr.mode_calcul_indicateur(indicateur_SELECT)
-        df_filtered = df_filtered[df_filtered['Indicateurs'] == indicateur_SELECT.strip().lower()]
     
-    # Process data
-    df_filtered = df_filtered.dropna(axis=1, how='all').fillna('-')
-    df_final = pd.DataFrame()
+    df_filtered = df_filtered.dropna(axis=1, how='all').fillna('-').copy()
+    
+    df_final_rows = []
     
     for _, row in df_filtered.iterrows():
-        dimension_cols = row['Dimension'].split(',')
-        category_values = row['Modalites'].split('/')
-        dimension_cols = [col.strip() for col in dimension_cols]
-        category_values = [value.strip() for value in category_values]
+        dimension_cols = [col.strip() for col in row['Dimension'].split('/')]
+        category_values = [value.strip() for value in row['Modalites'].split('/')]
+        
         dimension_dict = dict(zip(dimension_cols, category_values))
-        temp_row = pd.Series(dimension_dict)
-        temp_row['Indicateurs'] = row['Indicateurs']
-        temp_row['Valeur'] = row['Valeur']
-        temp_row['Annee'] = row['Annee']
-        cle_pivot_table = ",".join(dimension_cols) + ",Annee"
-        temp_row['cle_pivot_table'] = cle_pivot_table
-        df_final = pd.concat([df_final, temp_row.to_frame().T], ignore_index=True)
+        
+        temp_row_dict = {
+            'Indicateurs': row['Indicateurs'],
+            'Valeur': row['Valeur'],
+            'Annee': row['Annee']
+        }
+        temp_row_dict.update(dimension_dict)
+
+        cle_pivot_table_parts = dimension_cols + ['Annee']
+        temp_row_dict['cle_pivot_table'] = ",".join(cle_pivot_table_parts)
+        
+        df_final_rows.append(temp_row_dict)
     
-    df_filtered = df_final.dropna(axis=1, how='all')
-    
-    # If no data, render no_data.html
+    df_final = pd.DataFrame(df_final_rows)
+    df_filtered = df_final.dropna(axis=1, how='all').copy()
+
+    if 'Annee' in df_filtered.columns:
+        df_filtered['Annee'] = pd.to_numeric(df_filtered['Annee'], errors='coerce').astype('Int64')
+    if 'Valeur' in df_filtered.columns:
+        df_filtered['Valeur'] = pd.to_numeric(df_filtered['Valeur'], errors='coerce')
+
     if df_filtered.empty:
         return render_template('no_data.html')
     
-    # If JSON format is requested (for AJAX), return JSON
     if request.args.get('format') == 'json':
+        df_json_ready = df_filtered.copy()
+        for col in ['Annee', 'Valeur']:
+            if col in df_json_ready.columns:
+                df_json_ready[col] = df_json_ready[col].apply(lambda x: int(x) if pd.notna(x) and col == 'Annee' else (float(x) if pd.notna(x) else None))
+        
         return jsonify({
-            'data': df_filtered.to_dict(orient='records'),
+            'data': df_json_ready.to_dict(orient='records'),
             'definitions': definitions,
             'mode_calcul': mode_calcul
         })
     
-    # Store initial filtered DataFrame in session (optional, if needed elsewhere)
-    df_filtered_json = df_filtered.to_json(orient='split')
-    session['df_filtered'] = df_filtered_json
-    
-    # Get columns for desaggregation
+    print('Les colonnes dans le dataframe:',df_filtered.columns)
+    print('Notre indicateur:',indicateur_SELECT)
     existing_columns = df_filtered.columns.tolist()
     columns_to_exclude = ['Valeur', 'Indicateurs', 'cle_pivot_table']
     desaggregation_columns = [col for col in existing_columns if col not in columns_to_exclude]
+    print('liste des colonnes:',desaggregation_columns)
     
     return render_template(
         'result.html',
         definitions=definitions,
         mode_calcul=mode_calcul,
         colonne_valable=desaggregation_columns,
-        indicateur2=indicateur_SELECT,
-        df_filtered=df_filtered_json
+        indicateur2=indicateur_SELECT
     )
+
 # Accès spécefique à une région
 @app.route('/search_indicatorsR/<path:indicateur>') 
 def request_indicateurR(indicateur):
@@ -338,7 +356,7 @@ def request_indicateurR(indicateur):
     df_filtered = df_filtered.fillna('-')
     df_final = pd.DataFrame()
     for _, row in df_filtered.iterrows():
-            dimension_cols = row['Dimension'].split(',')
+            dimension_cols = row['Dimension'].split('/')
             category_values = row['Modalites'].split('/')
             dimension_cols = [col.strip() for col in dimension_cols]
             category_values = [value.strip() for value in category_values]
@@ -378,53 +396,86 @@ def request_indicateurR(indicateur):
     
 @app.route('/process_columns', methods=['POST'])
 def process_columns():
-    # Récupérer les colonnes envoyées par la requête AJAX
-    data = request.get_json()
-    row_columns = data.get('row_columns', [])
-    col_columns = data.get('col_columns', [])
-    value_column = data.get('value_column', 'Valeur')
-    my_index=[row_columns,col_columns]
-    #print("Les choix utilisateurs",my_index)
-    # Charger les données réelles depuis la session ou depuis MySQL si nécessaire
-    df_filtered_json = session.get('df_filtered', None)
-    if df_filtered_json:
-        df_filtered = pd.read_json(io.StringIO(df_filtered_json), orient='split')
-    else:
-        return jsonify({"error": "Aucune donnée disponible dans la session"}), 400
-    # Vérification et conversion de la colonne 'valeur' en numérique
+    data_request = request.get_json()
+    row_columns = data_request.get('row_columns', [])
+    col_columns = data_request.get('col_columns', [])
+    value_column = data_request.get('value_column', 'Valeur')
+    indicateur_name = data_request.get('indicateur_name') # Nouveau : Récupérer l'indicateur depuis le front-end
+    my_index_selection = [row_columns, col_columns]
+
+    if not indicateur_name:
+        return jsonify({"error": "Nom de l'indicateur manquant dans la requête"}), 400
+
+    # Étape 1 : Récupérer les données brutes directement depuis la base de données
+    df = qr.obtention_data_mysql_requete(indicateur_name=indicateur_name)
+    
+    if df.empty:
+        return jsonify({"error": f"Aucune donnée trouvée pour l'indicateur '{indicateur_name}'"}), 400
+
+    # Étape 2 : Appliquer les mêmes transformations que dans request_indicateur2
+    df_filtered = df.copy() 
+    df_final_rows = []
+    
+    for _, row in df_filtered.iterrows():
+        if pd.notna(row.get('Dimension')) and pd.notna(row.get('Modalites')):
+            dimension_cols = [col.strip() for col in row['Dimension'].split('/')]
+            category_values = [value.strip() for value in row['Modalites'].split('/')]
+            
+            dimension_dict = dict(zip(dimension_cols, category_values))
+            
+            temp_row_dict = {
+                'Indicateurs': row.get('Indicateurs'),
+                'Valeur': row.get('Valeur'),
+                'Annee': row.get('Annee')
+            }
+            temp_row_dict.update(dimension_dict)
+
+            cle_pivot_table_parts = dimension_cols + ['Annee']
+            temp_row_dict['cle_pivot_table'] = ",".join(cle_pivot_table_parts)
+            
+            df_final_rows.append(temp_row_dict)
+    
+    df_final = pd.DataFrame(df_final_rows)
+    df_filtered = df_final.dropna(axis=1, how='all').copy()
+
+    # Nettoyage et conversion des types comme précédemment
     if value_column in df_filtered.columns:
-        try:
-            df_filtered[value_column] = pd.to_numeric(df_filtered[value_column], errors='coerce')
-            df_filtered = df_filtered.dropna(subset=[value_column])
-        except Exception as e:
-            return jsonify({"error": f"La colonne '{value_column}' contient des données non numériques : {e}"}), 400
+        df_filtered[value_column] = df_filtered[value_column].astype(str).str.replace(' ', '').str.replace(',', '.')
+        df_filtered[value_column] = pd.to_numeric(df_filtered[value_column], errors='coerce')
+        df_filtered = df_filtered.dropna(subset=[value_column])
+    
+    if 'Annee' in df_filtered.columns:
+        df_filtered['Annee'] = df_filtered['Annee'].astype(str).str.replace(' ', '').str.replace(',', '.')
+        df_filtered['Annee'] = pd.to_numeric(df_filtered['Annee'], errors='coerce').astype('Int64')
+
     try:
+        my_index_flat = list(chain.from_iterable(my_index_selection))
+        my_index_set = set(my_index_flat)
 
-        my_index= list(chain.from_iterable(my_index))
-        data_V1=my_index
-        #Ordonnée la data
-        df_filtered['cle_pivot_table'] = sorted(df_filtered['cle_pivot_table'])
-        # Convertir my_index en un ensemble pour faciliter la comparaison
-        my_index_set = set(my_index)
-
-        # Filtrer les lignes de df_filtered où cle_pivot_table contient les mêmes éléments que my_index
-        data = df_filtered[df_filtered['cle_pivot_table'].apply(lambda x: set(x.split(',')) == my_index_set)]
-        data['Annee'] = df_filtered['Annee'].astype(str)
-
-        # Afficher le DataFrame filtré pour vérification
+        data = df_filtered[df_filtered['cle_pivot_table'].apply(lambda x: set(x.split(',')) == my_index_set)].copy()
+        
+        print('Les colonnes des données extraire:',data.columns)
+        
+        print('Afficher',data.head())
         pivot_table = pd.pivot_table(
             data,
             index=row_columns,
             columns=col_columns,
             values=value_column,
-            aggfunc='sum',
-            fill_value=0
+            aggfunc='first'
         )
-        pivot_table = pivot_table 
-        # Réinitialiser l'index pour convertir les données en format JSON structuré
+        
         pivot_table.reset_index(inplace=True)
+        
+        processed_columns = []
+        for col in pivot_table.columns:
+            if isinstance(col, tuple):
+                processed_columns.append([str(item) for item in col])
+            else:
+                processed_columns.append([str(col)])
+
         result_data = {
-            "columns": [list(map(str, col)) if isinstance(col, tuple) else [str(col)] for col in pivot_table.columns],
+            "columns": processed_columns,
             "index": list(pivot_table.index),
             "data": pivot_table.values.tolist()
         }
@@ -433,22 +484,6 @@ def process_columns():
 
     return jsonify(result_data)
 
-
-@app.route('/get_data', methods=['GET'])
-def get_data():
-    try:
-        # Charger les données filtrées depuis la session
-        df_filtered_json = session.get('df_filtered', None)
-        if df_filtered_json is None:
-            return jsonify({"error": "Aucune donnée filtrée disponible."}), 404
-        # Convertir le JSON en DataFrame et ensuite en dictionnaire
-        df_filtered = pd.read_json(df_filtered_json, orient='split')
-        data = df_filtered.to_dict(orient='records')
-        # Affichage pour vérifier le contenu
-        return jsonify(data)
-    except Exception as e:
-        print(f"Une erreur est survenue : {e}")
-        return jsonify({"error": "Une erreur est survenue lors du chargement des données."}), 500
 
 
 
@@ -465,10 +500,7 @@ def get_data2():
     return jsonify(data_str_keys)
 
 
-# Generateur de données excel
-@app.route('/generateur')
-def generateur():
-    return render_template('generateur_excel.html')
+
 
 #-------------------------------------------------FIN API
 

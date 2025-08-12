@@ -197,7 +197,7 @@
                     clearInterval(progressInterval);
                     progressContainer.style.display = 'none';
                     progressBar.style.width = '0%';
-                    window.location.href = `/search_indicators2/${encodeURIComponent(indicateur)}`;
+                    window.location.href = `/filter_indicator/${encodeURIComponent(indicateur)}`;
                 }
             }, interval);
         }
@@ -252,7 +252,7 @@
                                     suggestionsContainer.innerHTML = '';
                                     suggestionsContainer.style.display = 'none';
                                     isSuggestionsActive = false;
-                                    window.location.href = `/search_indicators2/${encodeURIComponent(item)}`;
+                                    window.location.href = `/filter_indicator/${encodeURIComponent(item)}`;
                                 };
                                 suggestionsContainer.appendChild(div);
                             });
@@ -416,7 +416,7 @@
                     clearInterval(progressInterval);
                     progressContainer.style.display = 'none';
                     progressBar.style.width = '0%';
-                    window.location.href = `/search_indicators2/${encodeURIComponent(indicateur)}`;
+                    window.location.href = `/filter_indicator/${encodeURIComponent(indicateur)}`;
                 }
             }, interval);
         }

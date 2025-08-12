@@ -119,10 +119,99 @@ def get_data(filepath):
         return pd.DataFrame()  # Retourner un DataFrame vide en cas d'erreur
 
 
-# Récupérer des données depuis MySQL pour V1_indicateur
+
+
+from contextlib import contextmanager
+from sqlalchemy.orm import Session
 import pandas as pd
 
-def get_data_from_mysql_V1(offset=0, limit=25):
+@contextmanager
+def session_scope():
+    """Fournit un gestionnaire de contexte pour la session SQLAlchemy."""
+    sess = Session(engine)
+    try:
+        yield sess
+        sess.commit()
+    except:
+        sess.rollback()
+        raise
+    finally:
+        sess.close()
+
+def obtention_data_mysql_niveauDesagr(indicateur_name, offset=0, limit=25):
+    try:
+        with session_scope() as session:
+            # Requête pour récupérer toutes les colonnes
+            query = session.query(
+                V1Indicateur.Dimension,
+                V1Indicateur.Modalites,
+                V1Indicateur.Indicateurs,
+                V1Indicateur.Annee,
+                V1Indicateur.Valeur
+            ).filter(V1Indicateur.Indicateurs == indicateur_name)
+
+    
+
+            # Conversion en DataFrame
+            df = pd.read_sql(query.statement, engine)
+
+            # Vérifier si le DataFrame est vide
+            if df.empty:
+                print(f"Aucune donnée trouvée pour l'indicateur '{indicateur_name}'")
+                return pd.DataFrame()
+
+            # Garder uniquement les lignes avec des Dimension distinctes
+            df = df.drop_duplicates(subset=['Dimension'], keep='first')
+
+            # Appliquer offset et limit sur le DataFrame
+            df = df.iloc[offset:offset + limit]
+
+            return df
+    except Exception as e:
+        print(f"Erreur lors de la récupération des données MySQL pour l'indicateur '{indicateur_name}' : {str(e)}")
+        return pd.DataFrame()
+def obtention_data_mysql_requete(indicateur_name, offset=0, limit=1000):
+    try:
+        with session_scope() as session:
+            # Requête pour récupérer toutes les colonnes
+            query = session.query(
+                V1Indicateur.Dimension,
+                V1Indicateur.Modalites,
+                V1Indicateur.Indicateurs,
+                V1Indicateur.Annee,
+                V1Indicateur.Valeur
+            ).filter(V1Indicateur.Indicateurs == indicateur_name)
+            
+            # Appliquer la pagination directement dans la requête SQLAlchemy
+            #query = query.offset(offset).limit(limit)
+
+            # Conversion en DataFrame
+            df = pd.read_sql(query.statement, session.bind) # session.bind est nécessaire pour lire la requête
+
+            if df.empty:
+                print(f"Aucune donnée trouvée pour l'indicateur '{indicateur_name}'")
+                return pd.DataFrame()
+
+            return df
+    except Exception as e:
+        print(f"Erreur lors de la récupération des données MySQL pour l'indicateur '{indicateur_name}' : {str(e)}")
+        return pd.DataFrame()
+    
+
+def autocompletion():
+    try:
+        query = session.query(
+          Indicateur.nom_indicateur
+        )
+        df = pd.read_sql(query.statement, engine)
+        return df
+    except Exception as e:
+        print(f"Erreur lors de la récupération des données MySQL : {e}")
+        return pd.DataFrame()
+
+#.filter(V1Indicateur.Region == region_name)
+# Récupérer des données depuis MySQL pour une région spécifique
+def get_data_from_mysql_VR(region_name,offset=0, limit=25):
     try:
         query = session.query(
             V1Indicateur.Dimension,
@@ -130,24 +219,13 @@ def get_data_from_mysql_V1(offset=0, limit=25):
             V1Indicateur.Indicateurs,
             V1Indicateur.Annee,
             V1Indicateur.Valeur
-        ).offset(offset).limit(limit)
+        ).filter(V1Indicateur.Region == region_name).offset(offset).limit(limit)
         
         df = pd.read_sql(query.statement, engine)
         return df
     except Exception as e:
         print(f"Erreur lors de la récupération des données MySQL : {e}")
         return pd.DataFrame()
-
-# Récupérer des données depuis MySQL pour une région spécifique
-def get_data_from_mysql_VR(region_name):
-    try:
-        # Requête pour récupérer les données filtrées par région
-        query = session.query(V1Indicateur.Dimension, V1Indicateur.Modalites, V1Indicateur.Indicateurs, V1Indicateur.Annee, V1Indicateur.Valeur).filter(V1Indicateur.Region == region_name)
-        df = pd.read_sql(query.statement, engine)
-        return df
-    except Exception as e:
-        print(f"Erreur lors de la récupération des données pour la région {region_name}: {e}")
-        return pd.DataFrame()  # Retourner un DataFrame vide en cas d'erreur
 
 # Insérer des données depuis un fichier Excel dans la base de données
 def insert_data_from_excel(file_path):
@@ -203,3 +281,6 @@ def generate_region_data():
         "production_data": production_data,
         "indicateurs": indicateurs
     }
+
+
+
