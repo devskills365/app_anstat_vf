@@ -36,7 +36,6 @@
     </style>
 </head>
 <body class="font-montserrat bg-gray-100">
-    <!-- Section 1 : Menu (Fixé en haut) -->
     <header class="bg-white shadow-lg p-4 fixed top-0 left-0 w-full z-50">
         <div class="flex flex-col md:flex-row justify-between items-center" x-data="{ open: false }" @click.outside="open = false">
             <div class="flex items-center justify-between w-full md:w-auto">
@@ -77,7 +76,6 @@
         </div>
     </header>
 
-    <!-- Section 2 : Contenu Principal -->
     <div class="container mx-auto px-4 py-8 flex flex-col lg:flex-row gap-6 mt-24">
         <div class="left-column flex flex-col lg:flex-row gap-6 w-full">
             <div class="left-section flex-1 bg-white p-6 rounded-xl shadow-lg">
@@ -138,7 +136,6 @@
         </div>
     </div>
 
-    <!-- Section 3 : Graphiques -->
     <div class="charts-row-container mx-auto px-4 py-8 flex flex-col md:flex-row gap-6">
         <div class="chart-card flex-1 bg-white p-6 rounded-xl shadow-lg">
             <h5 class="text-[#49655A] text-lg font-semibold mb-4">Évolution de la population de 2019-2023</h5>
@@ -154,9 +151,6 @@
         </div>
     </div>
 
-    <!-- Footer -->
-
-    <!-- Footer -->
     <footer class="bg-[#49655A] text-white py-6 mt-8">
         <div class="container mx-auto px-4 flex flex-col md:flex-row justify-between items-center">
             <div class="mb-4 md:mb-0">
@@ -176,33 +170,32 @@
         </div>
     </footer>
 
-    <!-- Scripts JavaScript -->
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     <script>
         // Variable globale pour l'état des suggestions
         let isSuggestionsActive = false;
-    
+
         // Variables globales pour la carte
         let svg, path, colorScale, selectedIndicator = "Population", selectedRegion = null;
-    
+
         // Section 1 : Menu
         function setActive(element) {
             document.querySelectorAll('nav a').forEach(link => link.classList.remove('bg-[#49655A]', 'text-white'));
             element.classList.add('bg-[#49655A]', 'text-white');
         }
-    
+
         function submitSearch() {
             const query = document.getElementById('search-input').value;
             console.log('Recherche soumise : ' + query);
             return true;
         }
-    
+
         document.addEventListener("DOMContentLoaded", function () {
             // Section 1 : Autocomplétion Recherche
             const searchInput = document.getElementById("search-input");
             const suggestionsContainer = document.getElementById("suggestions");
             const regionList = document.querySelector(".region-list");
-    
+
             searchInput.addEventListener("input", function () {
                 const query = searchInput.value.trim();
                 if (query.length < 2) {
@@ -238,12 +231,12 @@
                     })
                     .catch(error => console.error('Erreur autocomplétion :', error));
             });
-    
+
             suggestionsContainer.addEventListener("mouseover", () => isSuggestionsActive = true);
             suggestionsContainer.addEventListener("mouseout", (event) => {
                 if (!searchInput.contains(event.relatedTarget)) isSuggestionsActive = false;
             });
-    
+
             document.addEventListener("click", function (event) {
                 if (!searchInput.contains(event.target) && !suggestionsContainer.contains(event.target) && !regionList.contains(event.target)) {
                     suggestionsContainer.innerHTML = "";
@@ -251,7 +244,7 @@
                     isSuggestionsActive = false;
                 }
             });
-    
+
             // Section 2 : Horloge démographique
             let totalPopulation = parseInt("{{ "{:,.0f}".format(pop_minute).replace(' ', '') if pop_minute is defined else '29389150' }}") || 29389150;
             function updatePopulationBox() {
@@ -278,12 +271,12 @@
             }
             setInterval(updatePopulationBox, 1000);
             updatePopulationBox();
-    
+
             const today = new Date();
             const formattedToday = `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}-${today.getFullYear()}`;
             document.getElementById('birthDateRange').textContent = `Du 01-01-2025 au ${formattedToday}`;
             document.getElementById('deathDateRange').textContent = `Du 01-01-2025 au ${formattedToday}`;
-    
+
             // Section 2 : Carte et Indicateurs
             const indicatorTitles = {
                 "Rapport de Masculinité (RM) en %": "Cartographie du rapport de masculinité en 2021",
@@ -296,15 +289,15 @@
                 "Nombre d'évacuations après Accouchement": "Carte des évacuations post-accouchement en 2021",
                 "Population": "Cartographie de la population en 2021"
             };
-    
+
             const width = 760, height = 500;
             const projection = d3.geoMercator().center([-5.547080, 7.539989]).scale(4000).translate([width / 2, height / 2]);
             path = d3.geoPath().projection(projection);
             svg = d3.select("#map").append("svg").attr("width", width).attr("height", height);
             const legendGroup = svg.append("g").attr("class", "legend-group").attr("transform", `translate(${width - 170}, ${height - 150})`);
-    
+
             svg.append("rect").attr("x", 0).attr("y", 0).attr("width", width).attr("height", height).attr("fill", "#e0e0e0").attr("opacity", 0.2);
-    
+
             function updateMap(data, indicator) {
                 const values = data.features.map(d => d.properties[indicator]).filter(v => v !== undefined && v !== null);
                 const minValue = d3.min(values) || 0;
@@ -316,7 +309,7 @@
                 });
                 updateLegend(minValue, maxValue, indicator);
             }
-    
+
             function updateLegend(minValue, maxValue, indicator) {
                 const legendWidth = 150;
                 const legendScale = d3.scaleLinear().domain([minValue, maxValue]).range([0, legendWidth]);
@@ -333,7 +326,7 @@
                     .style("font-weight", "bold")
                     .style("fill", "black")
                     .text(titleText);
-    
+
                 const legend = legendGroup.append("g").attr("class", "legend").attr("transform", "translate(0, 40)");
                 let gradient = svg.select("defs").select("#gradient");
                 if (gradient.empty()) {
@@ -342,17 +335,17 @@
                 gradient.selectAll("stop").remove();
                 gradient.append("stop").attr("offset", "0%").attr("stop-color", "hsla(91, 35%, 22%, 0.1)");
                 gradient.append("stop").attr("offset", "100%").attr("stop-color", "#49655A");
-    
+
                 legend.append("rect").attr("width", legendWidth).attr("height", 10).style("fill", "url(#gradient)").style("stroke", "#999").style("stroke-width", "0.5");
                 legend.append("g").attr("transform", "translate(0, 10)").call(legendAxis).selectAll("text").style("font-size", "10px");
-    
+
                 if (indicator === 'Population') {
                     legend.append("text").attr("x", 0).attr("y", 45).style("font-size", "12px").style("font-weight", "bold").style("fill", "black").text("Hommes: 15 344 990");
                     legend.append("text").attr("x", 0).attr("y", 60).style("font-size", "12px").style("font-weight", "bold").style("fill", "black").text("Femmes: 14 044 160");
                     legend.append("text").attr("x", 0).attr("y", 75).style("font-size", "12px").style("font-weight", "bold").style("fill", "black").text("Total: 29 389 150");
                 }
             }
-    
+
             d3.json("{{ url_for('static', filename='carte/populations_updated.json') }}").then(function(geojsonData) {
                 console.log("GeoJSON chargé :", geojsonData);
                 svg.selectAll(".region")
@@ -370,30 +363,29 @@
                         const value = d.properties[selectedIndicator];
                         tooltip.classed("hidden", false)
                                .html(`<strong>${d.properties.REGION}</strong><br>${selectedIndicator}: ${value !== undefined ? value.toLocaleString('fr-FR') : 'N/A'}`);
-    
+
                         const tooltipWidth = tooltip.node().offsetWidth;
                         const tooltipHeight = tooltip.node().offsetHeight;
                         let leftPos = event.clientX - mapRect.left + scrollLeft - 100;
                         let topPos = event.clientY - mapRect.top + scrollTop - tooltipHeight + 300;
-    
+
                         if (leftPos + tooltipWidth > mapRect.width + scrollLeft) {
                             leftPos = event.clientX - mapRect.left + scrollLeft - tooltipWidth - 20;
                         }
                         if (topPos < scrollTop) {
                             topPos = event.clientY - mapRect.top + scrollTop + 5;
                         }
-    
+
                         tooltip.style("left", leftPos + "px")
                                .style("top", topPos + "px");
-             
 
-                    })
+                    }) // C'est ici que la parenthèse manquait
                     .on("mouseout", function(event, d) {
                         d3.select("#tooltip").classed("hidden", true);
                         resetRegionHighlight(event);
                     })
                     .on("click", (event, d) => window.location.href = `/region_vitrine/${d.properties.REGION}`);
-    
+
                 const sampleProperties = geojsonData.features[0].properties;
                 const indicators = Object.keys(sampleProperties).filter(key => typeof sampleProperties[key] === 'number' && key !== 'Année');
                 const indicatorList = d3.select("#indicators")
@@ -415,116 +407,133 @@
                 svg.append("text").attr("x", width / 2).attr("y", height / 2)
                    .attr("text-anchor", "middle").style("fill", "red").text("Erreur de chargement de la carte");
             });
-    
-            // Fonction pour mettre en surbrillance une région (adaptée de l’ancien code)
-
-   
-    
-            // Section 3 : Graphiques
-            const years = {{ years|tojson|default('[2019, 2020, 2021, 2022, 2023]') }};
-            const population = {{ population|tojson|default('[28000000, 28500000, 29000000, 29500000, 30000000]') }};
-            const schoolEnrollmentRate = {{ school_enrollment_rate|tojson|default('[60, 62, 65, 68, 70]') }};
-            const ageGroups = {{ age_groups|tojson|default('["0-14", "15-24", "25-54", "55-64", "65+"]') }};
-            const ageDistribution = {{ age_distribution|tojson|default('[8000000, 6000000, 10000000, 3000000, 2000000]') }};
-    
-            new Chart(document.getElementById('chart-line-population'), {
-                type: 'line',
-                data: {
-                    labels: years,
-                    datasets: [{
-                        label: 'Population',
-                        data: population,
-                        borderColor: "hsla(91, 35%, 22%, 0.773)",
-                        backgroundColor: 'white',
-                        fill: false
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { title: { display: false }, tooltip: { mode: 'index', intersect: false } },
-                    scales: {
-                        x: { title: { display: true, text: 'Année' } },
-                        y: { title: { display: true, text: 'Population (en millions)' } }
-                    }
-                }
-            });
-    
-            new Chart(document.getElementById('chart-line-enrollment'), {
-                type: 'line',
-                data: {
-                    labels: years,
-                    datasets: [{
-                        label: 'Taux de scolarisation (%)',
-                        data: schoolEnrollmentRate,
-                        borderColor: '#F39323',
-                        backgroundColor: 'white',
-                        fill: false
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { title: { display: false }, tooltip: { mode: 'index', intersect: false } },
-                    scales: {
-                        x: { title: { display: true, text: 'Année' } },
-                        y: { title: { display: true, text: 'Taux de scolarisation' } }
-                    }
-                }
-            });
-    
-            new Chart(document.getElementById('chart-bar-age-distribution'), {
-                type: 'bar',
-                data: {
-                    labels: ageGroups,
-                    datasets: [{
-                        label: "Population",
-                        data: ageDistribution,
-                        borderColor: '#0C6B23',
-                        backgroundColor: 'rgba(12, 107, 35, 0.2)',
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { title: { display: false } },
-                    scales: {
-                        x: { title: { display: true, text: 'Tranche d\'âge' } },
-                        y: { title: { display: true, text: 'Population (millier)' }, beginAtZero: true }
-                    }
-                }
-            });
         });
-    </script>
-      <script>
-        // Fonction pour mettre en surbrillance une région
-function highlightRegion(regionName) {
-    svg.selectAll(".region")
-        .attr("fill", d => colorScale(d.properties.Population))
-        .attr("stroke", "none");
 
-    svg.selectAll(".region")
-        .filter(d => d.properties.REGION === regionName)
-        .attr("fill", "#F39323")
-        .attr("stroke", "#000000")
-        .attr("stroke-width", 2);
-}
+        // Section 3 : Fonctions pour les graphiques
+        function loadCharts() {
+            // Charger les données de population
+            fetch('/api/population')
+                .then(response => response.json())
+                .then(data => {
+                    const years = data.map(item => item.year);
+                    const population = data.map(item => item.population);
+                    new Chart(document.getElementById('chart-line-population'), {
+                        type: 'line',
+                        data: {
+                            labels: years,
+                            datasets: [{
+                                label: 'Population',
+                                data: population,
+                                borderColor: "hsla(91, 35%, 22%, 0.773)",
+                                backgroundColor: 'white',
+                                fill: false
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { title: { display: false }, tooltip: { mode: 'index', intersect: false } },
+                            scales: {
+                                x: { title: { display: true, text: 'Année' } },
+                                y: { title: { display: true, text: 'Population (en millions)' } }
+                            }
+                        }
+                    });
+                })
+                .catch(error => console.error('Erreur chargement population :', error));
 
-// Fonction pour réinitialiser la surbrillance
-function resetRegionHighlight(event) {
-    const suggestionsContainer = document.getElementById("suggestions");
-    // Ne réinitialise pas si les suggestions sont actives ou si le curseur va vers elles
-    if (
-        window.isSuggestionsActive || 
-        (event && suggestionsContainer.contains(event.relatedTarget))
-    ) {
-        return;
-    }
-    svg.selectAll(".region")
-        .attr("fill", d => colorScale(d.properties.Population))
-        .attr("stroke", "none");
-}
+            // Charger les données de taux de scolarisation
+            fetch('/api/school_enrollment')
+                .then(response => response.json())
+                .then(data => {
+                    const years = data.map(item => item.year);
+                    const enrollmentRate = data.map(item => item.enrollment_rate);
+                    new Chart(document.getElementById('chart-line-enrollment'), {
+                        type: 'line',
+                        data: {
+                            labels: years,
+                            datasets: [{
+                                label: 'Taux de scolarisation (%)',
+                                data: enrollmentRate,
+                                borderColor: '#F39323',
+                                backgroundColor: 'white',
+                                fill: false
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { title: { display: false }, tooltip: { mode: 'index', intersect: false } },
+                            scales: {
+                                x: { title: { display: true, text: 'Année' } },
+                                y: { title: { display: true, text: 'Taux de scolarisation' } }
+                            }
+                        }
+                    });
+                })
+                .catch(error => console.error('Erreur chargement scolarisation :', error));
+
+            // Charger les données de répartition par âge
+            fetch('/api/age_distribution')
+                .then(response => response.json())
+                .then(data => {
+                    const ageGroups = data.map(item => item.age_group);
+                    const ageDistribution = data.map(item => item.population);
+                    new Chart(document.getElementById('chart-bar-age-distribution'), {
+                        type: 'bar',
+                        data: {
+                            labels: ageGroups,
+                            datasets: [{
+                                label: "Population",
+                                data: ageDistribution,
+                                borderColor: '#0C6B23',
+                                backgroundColor: 'rgba(12, 107, 35, 0.2)',
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { title: { display: false } },
+                            scales: {
+                                x: { title: { display: true, text: 'Tranche d\'âge' } },
+                                y: { title: { display: true, text: 'Population (millier)' }, beginAtZero: true }
+                            }
+                        }
+                    });
+                })
+                .catch(error => console.error('Erreur chargement répartition âge :', error));
+        }
+
+        // Appel de la fonction après le chargement du DOM
+        document.addEventListener("DOMContentLoaded", loadCharts);
+
+        // Fonctions pour la surbrillance des régions
+        function highlightRegion(regionName) {
+            svg.selectAll(".region")
+                .attr("fill", d => colorScale(d.properties.Population))
+                .attr("stroke", "none");
+
+            svg.selectAll(".region")
+                .filter(d => d.properties.REGION === regionName)
+                .attr("fill", "#F39323")
+                .attr("stroke", "#000000")
+                .attr("stroke-width", 2);
+        }
+
+        function resetRegionHighlight(event) {
+            const suggestionsContainer = document.getElementById("suggestions");
+            // Ne réinitialise pas si les suggestions sont actives ou si le curseur va vers elles
+            if (
+                window.isSuggestionsActive || 
+                (event && suggestionsContainer.contains(event.relatedTarget))
+            ) {
+                return;
+            }
+            svg.selectAll(".region")
+                .attr("fill", d => colorScale(d.properties.Population))
+                .attr("stroke", "none");
+        }
     </script>
 </body>
 </html>

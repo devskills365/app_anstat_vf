@@ -12,6 +12,7 @@ import sys
 from itertools import chain
 import my_queries as qr
 import config as cf
+import models as ml
 from config import app, db 
 import io
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -27,6 +28,21 @@ region_publication="PORO"# Cette variable va nous permettre
 logging.basicConfig(level=logging.DEBUG)
 # Configuration de la clé secrète pour les sessions Flask
 
+# Routes API pour récupérer les données
+@app.route('/api/population', methods=['GET'])
+def get_population():
+    data = ml.Population.query.all()
+    return jsonify([{'year': item.year, 'population': item.population} for item in data])
+
+@app.route('/api/school_enrollment', methods=['GET'])
+def get_school_enrollment():
+    data = ml.SchoolEnrollment.query.all()
+    return jsonify([{'year': item.year, 'enrollment_rate': item.enrollment_rate} for item in data])
+
+@app.route('/api/age_distribution', methods=['GET'])
+def get_age_distribution():
+    data = ml.AgeDistribution.query.filter_by(year=2023).all()  # Filtrer par année si besoin
+    return jsonify([{'age_group': item.age_group, 'population': item.population} for item in data])
 
 def days_in_year(year):
     # Retourne 366 si bissextile, 365 sinon
@@ -100,31 +116,20 @@ def population_data():
     }
     return jsonify(data)
 
-    
+
+
+  
 @app.route('/')
 def list_regions():
-    regions = qr.options_regions()
-    naissance,deces,pop_minute=naissance_deces_pop()
-    # Données
-    years = [2019, 2020, 2021, 2022, 2023]
-    population = [24.0, 27.0, 27.4, 29.8, 30.38]
-    school_enrollment_rate = [75, 76, 78, 79, 80]
-    age_groups = ['0-14 ans', '15-24 ans', '25-54 ans', '55 - 59 ans','60 -64 ','65-69','70-74 ans']
-    age_distribution = [40, 20, 30, 10, 18, 20]
-    liste_region=regions
+    regions =  qr.options_regions() # or qr.options_regions()
+    naissance, deces, pop_minute = naissance_deces_pop()
+    
+    # We no longer pass graph data to the template. It's fetched via API.
     return render_template('home.html',
-                        naissance=naissance,
-                        deces=deces,
-                        pop_minute=pop_minute,
-                        years=years,
-                        population=population,
-                        school_enrollment_rate=school_enrollment_rate,
-                        age_groups=age_groups,
-                        age_distribution=age_distribution,
-                        regions=regions,
-    )
-
-
+                           naissance=naissance,
+                           deces=deces,
+                           pop_minute=pop_minute,
+                           regions=regions)
 
 
 #Bloc du dashbord------------------------------------------Pour le tableau de bord par région
@@ -239,10 +244,6 @@ def autocomplete():
 
 
 
-import urllib.parse
-import pandas as pd
-from flask import request, jsonify, render_template, session
-from itertools import chain
 
 @app.route('/filter_indicator/<path:indicateur>')
 def page_filtration_data(indicateur):
@@ -292,6 +293,7 @@ def page_filtration_data(indicateur):
         df_final_rows.append(temp_row_dict)
     
     df_final = pd.DataFrame(df_final_rows)
+   
     df_filtered = df_final.dropna(axis=1, how='all').copy()
 
     if 'Annee' in df_filtered.columns:
@@ -436,8 +438,9 @@ def process_columns():
             df_final_rows.append(temp_row_dict)
     
     df_final = pd.DataFrame(df_final_rows)
+    
     df_filtered = df_final.dropna(axis=1, how='all').copy()
-
+    print('data issue V2 , prête analysée',df_final.columns)
     # Nettoyage et conversion des types comme précédemment
     if value_column in df_filtered.columns:
         df_filtered[value_column] = df_filtered[value_column].astype(str).str.replace(' ', '').str.replace(',', '.')

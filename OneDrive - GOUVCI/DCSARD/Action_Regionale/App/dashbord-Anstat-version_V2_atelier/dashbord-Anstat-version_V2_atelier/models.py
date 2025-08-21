@@ -66,6 +66,27 @@ class DirectionStatistique(db.Model):
     def __repr__(self):
         return f"<DirectionStatistique(id={self.id}, nom={self.nom})>"
     
+
+
+# Modèles pour les tables
+class Population(db.Model):
+    __tablename__ = 'population'
+    id = db.Column(db.Integer, primary_key=True)
+    year = db.Column(db.Integer, nullable=False)
+    population = db.Column(db.Integer, nullable=False)
+
+class SchoolEnrollment(db.Model):
+    __tablename__ ='school_enrollment'
+    id = db.Column(db.Integer, primary_key=True)
+    year = db.Column(db.Integer, nullable=False)
+    enrollment_rate = db.Column(db.Float, nullable=False)
+
+class AgeDistribution(db.Model):
+    __tablename__ ='age_distribution'
+    id = db.Column(db.Integer, primary_key=True)
+    age_group = db.Column(db.String, nullable=False)
+    population = db.Column(db.Integer, nullable=False)
+    year = db.Column(db.Integer, nullable=False)
     
 
 
