@@ -27,18 +27,48 @@ region_publication="PORO"# Cette variable va nous permettre
 # Configuration du logger pour le débogage
 logging.basicConfig(level=logging.DEBUG)
 # Configuration de la clé secrète pour les sessions Flask
+#_____________________________________________________________________________Pour région
+from flask import Flask, jsonify, render_template, g
+import mysql.connector
+# Fonction pour obtenir la connexion à la base de données MySQL
 
+def get_db():
+    if not hasattr(g, 'mysql_db'):
+        g.mysql_db = mysql.connector.connect(
+            user=os.getenv('MYSQL_USER'),
+            password=os.getenv('MYSQL_PASSWORD'),
+            host=os.getenv('MYSQL_HOST'),
+            database=os.getenv('MYSQL_DATABASE')
+        )
+    return g.mysql_db
+
+
+
+# Fonction utilitaire pour récupérer des données et les formater en dictionnaire
+def fetch_and_format(query, params=None):
+    db = get_db()
+    cursor = db.cursor(dictionary=True) # dictionary=True pour obtenir des dictionnaires
+    if params:
+        cursor.execute(query, params)
+    else:
+        cursor.execute(query)
+    data = cursor.fetchall()
+    cursor.close()
+    return data
+
+
+#_________________________________________________________________Fin région, seulement les departement
 # Routes API pour récupérer les données
 @app.route('/api/population', methods=['GET'])
 def get_population():
     data = ml.Population.query.all()
     return jsonify([{'year': item.year, 'population': item.population} for item in data])
-
+#Taux de scolarité brut national
 @app.route('/api/school_enrollment', methods=['GET'])
 def get_school_enrollment():
     data = ml.SchoolEnrollment.query.all()
     return jsonify([{'year': item.year, 'enrollment_rate': item.enrollment_rate} for item in data])
-
+#Pour les données sur la population et distribution par age
 @app.route('/api/age_distribution', methods=['GET'])
 def get_age_distribution():
     data = ml.AgeDistribution.query.filter_by(year=2023).all()  # Filtrer par année si besoin
@@ -149,12 +179,116 @@ def region_vitrine(region):
     region_data = data[region]
     global region_publication
     region_publication=region
+    print('************:',region_publication)
     return render_template('region_vitrine.html',  
                            indicateurs=region_data['indicateurs'],  
                            region_name=region_publication,  
                            all_regions=regions) 
 
-#--------------------------------------------------Fin du tableau de bord
+#--------------------------------------------------Fin du tableau de 
+#_____________________________________________________________________Pour filtrer les données pour région
+
+
+
+@app.route('/api/data/ratio-eleve-enseignant')
+def get_ratio_eleve_enseignant():
+    global region_publication
+    region=region_publication.capitalize()
+    print('______________publication:',region_publication)
+    print('Région de filtre:',region)
+    data = fetch_and_format('SELECT departement, year, ratio FROM ratios_eleve_enseignant WHERE region = %s ORDER BY departement, year', (region,))
+    formatted_data = {}
+    for row in data:
+        departement = row['departement']
+        if departement not in formatted_data:
+            formatted_data[departement] = []
+        formatted_data[departement].append({'year': row['year'], 'ratio': row['ratio']})
+    return jsonify(formatted_data)
+
+@app.route('/api/data/taux-natalite')
+def get_taux_natalite():
+    global region_publication
+    region=region_publication.capitalize()
+    data = fetch_and_format('SELECT departement, year, natalite FROM taux_natalite WHERE region = %s ORDER BY departement, year', (region,))
+    formatted_data = {}
+    for row in data:
+        departement = row['departement']
+        if departement not in formatted_data:
+            formatted_data[departement] = []
+        formatted_data[departement].append({'year': row['year'], 'natalite': row['natalite']})
+    return jsonify(formatted_data)
+
+@app.route('/api/data/population')
+def get_population_regionale():
+    global region_publication
+    region=region_publication.capitalize()
+    data = fetch_and_format('SELECT departement, hommes, femmes FROM population_regionale WHERE region = %s', (region,))
+    return jsonify(data)
+
+@app.route('/api/data/personnel-medical')
+def get_personnel_medical():
+    global region_publication
+    region=region_publication.capitalize()
+    data = fetch_and_format('SELECT corps, departement, nombre FROM personnel_medical WHERE region = %s ORDER BY corps', (region,))
+    formatted_data = {}
+    for row in data:
+        corps = row['corps']
+        if corps not in formatted_data:
+            formatted_data[corps] = {}
+        formatted_data[corps][row['departement']] = row['nombre']
+    return jsonify(formatted_data)
+
+
+@app.route('/api/data/isf')
+def get_isf():
+    global region_publication
+    region=region_publication.capitalize()
+    data = fetch_and_format("SELECT year, isf FROM isf WHERE region = %s ORDER BY year", (region,))
+    return jsonify(data)
+
+@app.route('/api/data/taux-chomage')
+def get_taux_chomage():
+    global region_publication
+    region=region_publication.capitalize()
+    data = fetch_and_format("SELECT year, taux FROM taux_chomage WHERE region = %s ORDER BY year", (region,))
+    return jsonify(data)
+
+@app.route('/api/data/population-urbaine-rurale')
+def get_pop_urb_rur():
+    global region_publication
+    region=region_publication.capitalize()
+    data = fetch_and_format("SELECT type_pop, count FROM population_urbaine_rurale WHERE region = %s", (region,))
+    return jsonify(data)
+
+@app.route('/api/data/taux-alphabetisation')
+def get_taux_alphabetisation():
+    global region_publication
+    region=region_publication.capitalize()
+    data = fetch_and_format("SELECT year, taux FROM taux_alphabetisation WHERE region = %s ORDER BY year", (region,))
+    return jsonify(data)
+
+@app.route('/api/data/taux-brute-scolarite')
+def get_taux_brute_scolarite():
+    global region_publication
+    region=region_publication.capitalize()
+    data = fetch_and_format("SELECT year, taux FROM taux_brute_scolarite WHERE region = %s ORDER BY year", (region,))
+    return jsonify(data)
+
+@app.route('/api/data/taux-electrification')
+def get_taux_electrification():
+    global region_publication
+    region=region_publication.capitalize()
+    data = fetch_and_format("SELECT year, nombre FROM taux_electrification WHERE region = %s ORDER BY year", (region,))
+    return jsonify(data)
+
+
+
+#_____________________________________________________________________Fin deuxieme
+
+
+
+
+
 publications_data = conf_pub.load_publications_from_db()
 @app.route('/publications')
 def publications_region():

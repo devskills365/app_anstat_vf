@@ -50,6 +50,111 @@ INSERT INTO age_distribution (age_group, population, year) VALUES
 
 
 
+-- Pour les région
+
+-- Création des tables
+CREATE TABLE `ratios_eleve_enseignant` (
+    `departement` VARCHAR(255),
+    `year` INT,
+    `ratio` DECIMAL(5, 2)
+);
+
+CREATE TABLE `taux_natalite` (
+    `departement` VARCHAR(255),
+    `year` INT,
+    `natalite` DECIMAL(5, 2)
+);
+
+CREATE TABLE `population_regionale` (
+    `departement` VARCHAR(255),
+    `hommes` INT,
+    `femmes` INT
+);
+
+CREATE TABLE `personnel_medical` (
+    `corps` VARCHAR(255),
+    `departement` VARCHAR(255),
+    `nombre` INT
+);
+
+CREATE TABLE `isf` (
+    `region` VARCHAR(255),
+    `year` INT,
+    `isf` DECIMAL(5, 2)
+);
+
+CREATE TABLE `taux_chomage` (
+    `region` VARCHAR(255),
+    `year` INT,
+    `taux` DECIMAL(5, 2)
+);
+
+CREATE TABLE `population_urbaine_rurale` (
+    `region` VARCHAR(255),
+    `type_pop` VARCHAR(255),
+    `count` INT
+);
+
+CREATE TABLE `taux_alphabetisation` (
+    `region` VARCHAR(255),
+    `year` INT,
+    `taux` DECIMAL(5, 2)
+);
+
+CREATE TABLE `taux_brute_scolarite` (
+    `region` VARCHAR(255),
+    `year` INT,
+    `taux` DECIMAL(5, 2)
+);
+
+CREATE TABLE `taux_electrification` (
+    `region` VARCHAR(255),
+    `year` INT,
+    `nombre` INT
+);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
