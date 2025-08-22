@@ -149,19 +149,19 @@ document.addEventListener("DOMContentLoaded", function () {
             });
         });
 
-    // ISF (Indice Synthétique de Fécondité)
-    fetch('/api/data/isf')
+    // Proportion de la Population à moins 5 km  Centre de santé (ppcs)
+    fetch('/api/data/ppcs')
         .then(response => response.json())
         .then(dataIDH => {
-            var ctxIDH = document.getElementById("idhChart").getContext("2d");
+            var ctxIDH = document.getElementById("ppcsChart").getContext("2d");
             new Chart(ctxIDH, {
                 type: "line",
                 data: {
-                    labels: dataIDH.map(d => d.year),
+                    labels: dataIDH.map(d => d.Annee),
                     datasets: [
                         {
-                            label: "ISF(%)",
-                            data: dataIDH.map(d => d.isf),
+                            label: "Proportion de la Population à moins 5 km  Centre de santé",
+                            data: dataIDH.map(d => d.Valeur),
                             borderColor: "green",
                             fill: false,
                         },
@@ -169,7 +169,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 },
                 options: {
                     scales: {
-                        y: { beginAtZero: true, max: 1 },
+                        y: { beginAtZero: true, max: 100 },
                     },
                 },
             });

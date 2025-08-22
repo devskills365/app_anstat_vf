@@ -1,6 +1,8 @@
 /* Ici , ily a un filtre sur l'année et l'indicateur */
 USE annuaire;
 
+/* Page d'accueil central*/
+-- Indice de fécondité synthétique (ISF)
 -- Table pour l'évolution de la population
 CREATE TABLE population (
     id INTEGER PRIMARY KEY auto_increment,
@@ -50,8 +52,9 @@ INSERT INTO age_distribution (age_group, population, year) VALUES
 
 
 
--- Pour les région
-
+/* Page de vitrine région */
+-- Taux de dependance 2021 à 2025 (régionale)
+-- Taux d'urbanisation de 2025 (régionale)
 -- Création des tables
 CREATE TABLE `ratios_eleve_enseignant` (
     `departement` VARCHAR(255),
@@ -113,10 +116,27 @@ CREATE TABLE `taux_electrification` (
     `nombre` INT
 );
 
+ALTER TABLE `ratios_eleve_enseignant`
+ADD COLUMN `region` VARCHAR(255);
+ALTER TABLE `taux_natalite`
+ADD COLUMN `region` VARCHAR(255);
+ALTER TABLE `population_regionale`
+ADD COLUMN `region` VARCHAR(255);
+ALTER TABLE `personnel_medical`
+ADD COLUMN `region` VARCHAR(255);
 
 
 
-
+/* Une nouvelle version possible */
+CREATE TABLE `indicateurs_dashbord_region` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `Domaine` VARCHAR(255) NOT NULL,
+    `Indicateur` VARCHAR(255) NOT NULL,
+    `Annee` INT NOT NULL,
+    `Source` VARCHAR(255),
+    `Region` VARCHAR(255) NOT NULL,
+    `Valeur` DECIMAL(10, 2) NOT NULL
+);
 
 
 

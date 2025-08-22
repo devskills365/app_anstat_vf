@@ -239,11 +239,17 @@ def get_personnel_medical():
     return jsonify(formatted_data)
 
 
-@app.route('/api/data/isf')
-def get_isf():
+@app.route('/api/data/ppcs')
+def get_ppcs():
     global region_publication
-    region=region_publication.capitalize()
-    data = fetch_and_format("SELECT year, isf FROM isf WHERE region = %s ORDER BY year", (region,))
+    region=region_publication
+    query = """
+    SELECT Annee,Valeur
+    FROM indicateurs_dashbord_region
+    WHERE Region = %s AND Indicateur = 'Proportion de la population vivant à moins de 5 Km d’un centre de santé'
+    ORDER BY Annee
+    """
+    data = fetch_and_format(query, (region,))
     return jsonify(data)
 
 @app.route('/api/data/taux-chomage')
