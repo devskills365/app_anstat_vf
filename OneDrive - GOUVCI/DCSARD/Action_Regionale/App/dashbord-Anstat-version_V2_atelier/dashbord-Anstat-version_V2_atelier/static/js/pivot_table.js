@@ -221,7 +221,7 @@ function generateTable(data) {
                 const th = document.createElement('th');
                 th.textContent = previousValue || '';
                 th.setAttribute('colspan', colspanCount);
-                th.classList.add('sticky', 'top-0', 'z-10', 'bg-[#006B45]');
+                th.classList.add('sticky', 'top-0', 'z-10', 'bg-[#49655A]');
                 headerRow.appendChild(th);
 
                 previousValue = currentValue;
@@ -300,7 +300,7 @@ function generateFilters() {
 
         const filterTitle = document.createElement('div');
         filterTitle.classList.add('filter-title');
-        filterTitle.innerHTML = `<span class="icon-orange">&#43;</span> Filtrer sur ${col}`;
+        filterTitle.innerHTML = `<span class="icon-orange">&#43;</span> Filtrer par ${col}`;
         filterTitle.style.cursor = 'pointer';
 
         const checkboxContainer = document.createElement('div');

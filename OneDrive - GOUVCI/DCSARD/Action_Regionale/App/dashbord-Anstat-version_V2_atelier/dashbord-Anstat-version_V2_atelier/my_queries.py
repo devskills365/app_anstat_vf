@@ -198,9 +198,10 @@ def obtention_data_mysql_requete(indicateur_name, offset=0, limit=1000):
 def autocompletion():
     try:
         query = session.query(
-          Indicateur.nom_indicateur
-        )
+          V1Indicateur.Indicateurs
+        ).distinct()
         df = pd.read_sql(query.statement, engine)
+        print('issue de queries:',df)
         return df
     except Exception as e:
         print(f"Erreur lors de la récupération des données MySQL : {e}")

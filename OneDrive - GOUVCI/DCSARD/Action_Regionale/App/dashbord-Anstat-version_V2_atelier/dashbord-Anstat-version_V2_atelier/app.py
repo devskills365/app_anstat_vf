@@ -421,9 +421,9 @@ def autocomplete():
     # Charger les données depuis MySQL
     df = qr.autocompletion()
     # Convertir en minuscule pour une recherche insensible à la casse
-    df['nom_indicateur'] = df['nom_indicateur'].astype(str).str.strip().str.lower()
+    df['Indicateurs'] = df['Indicateurs'].astype(str).str.strip().str.lower()
     # Filtrer les indicateurs qui contiennent le texte saisi
-    suggestions = df[df['nom_indicateur'].str.contains(query, na=False)]['nom_indicateur'].unique().tolist()
+    suggestions = df[df['Indicateurs'].str.contains(query, na=False)]['Indicateurs'].unique().tolist()
     return jsonify(suggestions)
 
 
