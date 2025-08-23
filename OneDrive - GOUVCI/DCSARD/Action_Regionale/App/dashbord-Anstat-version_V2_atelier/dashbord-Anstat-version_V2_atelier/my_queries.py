@@ -181,9 +181,6 @@ def obtention_data_mysql_requete(indicateur_name, offset=0, limit=1000):
                 V1Indicateur.Annee,
                 V1Indicateur.Valeur
             ).filter(V1Indicateur.Indicateurs == indicateur_name)
-            
-            # Appliquer la pagination directement dans la requête SQLAlchemy
-            #query = query.offset(offset).limit(limit)
 
             # Conversion en DataFrame
             df = pd.read_sql(query.statement, session.bind) # session.bind est nécessaire pour lire la requête
@@ -228,59 +225,35 @@ def get_data_from_mysql_VR(region_name,offset=0, limit=25):
         return pd.DataFrame()
 
 # Insérer des données depuis un fichier Excel dans la base de données
-def insert_data_from_excel(file_path):
+def insert_data_from_excel_optimized(file_path):
     try:
+        # Lire le fichier Excel
         df = pd.read_excel(file_path)
-        df.columns = ['Dimension', 'Modalites', 'Indicateurs', 'Année', 'Valeur']
+        df.columns = ['Dimension', 'Modalites', 'Indicateurs', 'Annee', 'Valeur']
         
-        # Insertion dans la base de données
-        for _, row in df.iterrows():
-            data = V1Indicateur(
-                Dimension=row['Dimension'],
-                Modalites=row['Modalites'],
-                Indicateurs=row['Indicateurs'],
-                Annee=row['Année'],
-                Valeur=row['Valeur']
-            )
-            session.add(data)
+        # Nettoyer la colonne 'Valeur'
+        # 1. Convertir en chaîne de caractères pour pouvoir appliquer les méthodes de nettoyage
+        df['Valeur'] = df['Valeur'].astype(str)
+        # 2. Remplacer les virgules par des points
+        df['Valeur'] = df['Valeur'].str.replace(',', '.', regex=False)
+        # 3. Supprimer tout caractère non numérique, à l'exception des points décimaux
+        df['Valeur'] = df['Valeur'].str.replace(r'[^\d.]', '', regex=True)
+        # 4. Convertir la colonne en un type numérique
+        # Les valeurs vides ou non convertibles deviennent NaN
+        df['Valeur'] = pd.to_numeric(df['Valeur'])
         
-        session.commit()  # Valider les changements
-        print("Données insérées avec succès dans la table V1_indicateur.")
+        # Utiliser `to_sql` pour insérer les données
+        # Le moteur d'insertion gérera la conversion de NaN en NULL
+        df.to_sql('V1_indicateur', con=engine, if_exists='append', index=False)
+        
+        print("✅ Données insérées avec succès dans la table V1_indicateur.")
+        
     except Exception as e:
-        print(f"Erreur lors de l'insertion des données : {e}")
-        session.rollback()  # Annuler la transaction en cas d'erreur
-    finally:
-        session.close()  # Fermer la session
+        print(f"❌ Erreur lors de l'insertion des données : {e}")
+
         
-        
+file_path='C:/Users/DELL/OneDrive - GOUVCI/DCSARD/Action_Regionale/App/dashbord-Anstat-version_V2_atelier/dashbord-Anstat-version_V2_atelier/static/data/indica_nat_req_ok.xlsx'
 
-
-    
-    
-import random
-def generate_region_data():
-    age_data = {
-        "male": [random.randint(-200, -50) for _ in range(5)],
-        "female": [random.randint(50, 220) for _ in range(5)],
-        "ages": ['0-4', '5-9', '10-14', '15-19', '20-24']
-    }
-    
-    production_data = {
-        "years": [2010, 2012, 2014, 2016, 2018],
-        "production": [random.randint(300, 900) for _ in range(5)]
-    }
-    
-    indicateurs = {
-        "ind1": random.randint(20, 60),
-        "ind2": random.randint(40, 80),
-        "ind3": random.randint(10, 40)
-    }
-    
-    return {
-        "age_data": age_data,
-        "production_data": production_data,
-        "indicateurs": indicateurs
-    }
-
-
+if __name__=='__main__':
+    insert_data_from_excel_optimized(file_path)
 

@@ -38,7 +38,7 @@ class V1Indicateur(db.Model):
     Indicateurs = db.Column(db.String(255), nullable=True)
     Annee = db.Column(db.String(25), nullable=True)
     Valeur = db.Column(db.DECIMAL(15, 2), nullable=True)
-    Region = db.Column(db.String(45), nullable=True)  # Pas de clé étrangère explicite ici
+
 
     def __repr__(self):
         return f"<V1Indicateur(id={self.id}, Indicateurs={self.Indicateurs}, Annee={self.Annee})>"

@@ -220,22 +220,16 @@ def get_sante_budget():
 #Bloc du dashbord------------------------------------------Pour le tableau de bord par région
 
 
-# Générer les données pour toutes les régions restantes
-data = {region: qr.generate_region_data() for region in  qr.options_regions()}
-regions = list(data.keys())  
 
 @app.route('/region_vitrine/<region>')  
 def region_vitrine(region):  
-    if region not in regions:  
-        return "Region not found", 404  # Handle invalid region  
-    region_data = data[region]
     global region_publication
     region_publication=region
     print('************:',region_publication)
     return render_template('region_vitrine.html',  
-                           indicateurs=region_data['indicateurs'],  
+                         
                            region_name=region_publication,  
-                           all_regions=regions) 
+                          ) 
 
 
 
@@ -437,6 +431,8 @@ def autocomplete():
 
 
 
+# ... (le reste de votre code)
+
 @app.route('/filter_indicator/<path:indicateur>')
 def page_filtration_data(indicateur):
     offset = int(request.args.get('offset', 0))
@@ -447,52 +443,50 @@ def page_filtration_data(indicateur):
     mode_calcul = None
 
     # Récupérer les données depuis la base de données
-    df = qr.obtention_data_mysql_niveauDesagr(indicateur_name=indicateur_SELECT, offset=offset, limit=limit)
+    df = qr.obtention_data_mysql_requete(indicateur_name=indicateur_SELECT, offset=offset, limit=limit)
+    print("DataFrame original reçu :")
     print(df.head())
     
-    df_filtered = df.copy() 
-    
-    if indicateur_SELECT and 'Indicateurs' in df_filtered.columns:
-        df_filtered_temp = df_filtered.copy()
-        df_filtered_temp['Indicateurs_cleaned'] = df_filtered_temp['Indicateurs'].astype(str).str.strip().str.lower()
-        df_filtered = df_filtered_temp[df_filtered_temp['Indicateurs_cleaned'] == indicateur_SELECT.strip().lower()].copy()
-        if 'Indicateurs_cleaned' in df_filtered.columns:
-            df_filtered = df_filtered.drop(columns=['Indicateurs_cleaned'])
-
+    # Filtrer par l'indicateur sélectionné
+    if not df.empty and 'Indicateurs' in df.columns:
+        df_filtered = df[df['Indicateurs'].astype(str).str.strip().str.lower() == indicateur_SELECT.strip().lower()].copy()
+        
         definitions = qr.definition_indicateur(indicateur_SELECT)
         mode_calcul = qr.mode_calcul_indicateur(indicateur_SELECT)
+    else:
+        return render_template('no_data.html')
     
-    df_filtered = df_filtered.dropna(axis=1, how='all').fillna('-').copy()
+    # Créer dynamiquement les colonnes de désagrégation
+    for index, row in df_filtered.iterrows():
+        try:
+            dimension_cols = [col.strip() for col in row['Dimension'].split('/')]
+            category_values = [value.strip() for value in row['Modalites'].split('/')]
+            
+            dimension_dict = dict(zip(dimension_cols, category_values))
+            
+            for key, value in dimension_dict.items():
+                if key not in df_filtered.columns:
+                    df_filtered[key] = None
+                df_filtered.at[index, key] = value
+        except Exception as e:
+            # Gérer les erreurs de format de données
+            print(f"Erreur de traitement des données à la ligne {index}: {e}")
+            
+    # Créer la colonne 'cle_pivot_table'
+    existing_cols_for_pivot = [col for col in df_filtered.columns if col not in ['Indicateurs', 'Valeur', 'Annee', 'Dimension', 'Modalites']]
+    df_filtered['cle_pivot_table'] = df_filtered[existing_cols_for_pivot].apply(
+        lambda x: ','.join(x.dropna().astype(str)), axis=1
+    )
     
-    df_final_rows = []
-    
-    for _, row in df_filtered.iterrows():
-        dimension_cols = [col.strip() for col in row['Dimension'].split('/')]
-        category_values = [value.strip() for value in row['Modalites'].split('/')]
-        
-        dimension_dict = dict(zip(dimension_cols, category_values))
-        
-        temp_row_dict = {
-            'Indicateurs': row['Indicateurs'],
-            'Valeur': row['Valeur'],
-            'Annee': row['Annee']
-        }
-        temp_row_dict.update(dimension_dict)
-
-        cle_pivot_table_parts = dimension_cols + ['Annee']
-        temp_row_dict['cle_pivot_table'] = ",".join(cle_pivot_table_parts)
-        
-        df_final_rows.append(temp_row_dict)
-    
-    df_final = pd.DataFrame(df_final_rows)
-   
-    df_filtered = df_final.dropna(axis=1, how='all').copy()
-
+    # Convertir les colonnes en types numériques
     if 'Annee' in df_filtered.columns:
         df_filtered['Annee'] = pd.to_numeric(df_filtered['Annee'], errors='coerce').astype('Int64')
     if 'Valeur' in df_filtered.columns:
         df_filtered['Valeur'] = pd.to_numeric(df_filtered['Valeur'], errors='coerce')
+    
+    df_filtered = df_filtered.dropna(axis=1, how='all').fillna('-').copy()
 
+    # Le reste de votre code pour la réponse HTML ou JSON
     if df_filtered.empty:
         return render_template('no_data.html')
     
@@ -500,20 +494,23 @@ def page_filtration_data(indicateur):
         df_json_ready = df_filtered.copy()
         for col in ['Annee', 'Valeur']:
             if col in df_json_ready.columns:
-                df_json_ready[col] = df_json_ready[col].apply(lambda x: int(x) if pd.notna(x) and col == 'Annee' else (float(x) if pd.notna(x) else None))
-        
+                df_json_ready[col] = df_json_ready[col].apply(
+                    lambda x: int(x) if pd.notna(x) and col == 'Annee' else (float(x) if pd.notna(x) else None)
+                )
         return jsonify({
             'data': df_json_ready.to_dict(orient='records'),
             'definitions': definitions,
             'mode_calcul': mode_calcul
         })
     
-    print('Les colonnes dans le dataframe:',df_filtered.columns)
-    print('Notre indicateur:',indicateur_SELECT)
+    # Préparer les colonnes pour l'affichage dans le template
     existing_columns = df_filtered.columns.tolist()
-    columns_to_exclude = ['Valeur', 'Indicateurs', 'cle_pivot_table']
+    columns_to_exclude = ['Valeur', 'Indicateurs', 'cle_pivot_table', 'Dimension', 'Modalites']
     desaggregation_columns = [col for col in existing_columns if col not in columns_to_exclude]
-    print('liste des colonnes:',desaggregation_columns)
+    
+    print('Les colonnes dans le dataframe final:', df_filtered.columns)
+    print('Notre indicateur:', indicateur_SELECT)
+    print('Liste des colonnes de désagrégation:', desaggregation_columns)
     
     return render_template(
         'result.html',
@@ -522,7 +519,6 @@ def page_filtration_data(indicateur):
         colonne_valable=desaggregation_columns,
         indicateur2=indicateur_SELECT
     )
-
 # Accès spécefique à une région
 @app.route('/search_indicatorsR/<path:indicateur>') 
 def request_indicateurR(indicateur):

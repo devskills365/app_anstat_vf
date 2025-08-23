@@ -18,6 +18,7 @@ let colColumns = [];
 const pathArray = window.location.pathname.split('/');
 const indicateur_name = decodeURIComponent(pathArray[pathArray.length - 1]);
 
+// Écouteurs d'événements pour le glisser-déposer
 draggableItems.forEach(item => {
     item.addEventListener('dragstart', handleDragStart);
 });
@@ -98,8 +99,8 @@ function addColumnToArea(column, area, columnList, type) {
 function togglePlaceholders() {
     const rowPlaceholder = droppableAreaRows.querySelector('#placeholder-rows');
     const colPlaceholder = droppableAreaCols.querySelector('#placeholder-cols');
-    rowPlaceholder.style.display = droppableAreaRows.children.length > 1 ? 'none' : 'block';
-    colPlaceholder.style.display = droppableAreaCols.children.length > 1 ? 'none' : 'block';
+    if (rowPlaceholder) rowPlaceholder.style.display = droppableAreaRows.children.length > 1 ? 'none' : 'block';
+    if (colPlaceholder) colPlaceholder.style.display = droppableAreaCols.children.length > 1 ? 'none' : 'block';
 }
 
 function sendColumnsToServer() {
@@ -113,11 +114,9 @@ function sendColumnsToServer() {
 
 function loadData(offset, limit, isInitialLoad = false) {
     if (isLoading || !hasMoreData) {
-        console.log('Load ignored: isLoading=', isLoading, 'hasMoreData=', hasMoreData);
         return;
     }
     isLoading = true;
-    console.log('Fetching data: offset=', offset, 'limit=', limit);
 
     fetch('/process_columns?offset=' + offset + '&limit=' + limit, {
         method: 'POST',
@@ -142,10 +141,8 @@ function loadData(offset, limit, isInitialLoad = false) {
             return;
         }
         
-        if (data.data.length === 0) {
+        if (data.data.length < limit) {
             hasMoreData = false;
-        } else {
-            hasMoreData = true;
         }
         
         const newRows = data.data.map(row => {
@@ -159,17 +156,9 @@ function loadData(offset, limit, isInitialLoad = false) {
         tableData = tableData.concat(newRows);
         
         if (isInitialLoad) {
-            if (!tableData.columns) {
-                tableData.columns = data.columns;
-            }
+            tableData.columns = data.columns;
             applyFilters();
             generateFilters();
-            generateTable({
-                columns: tableData.columns,
-                data: filteredTableData.map(row => {
-                    return tableData.columns.map(col => row[col.join(' ')]);
-                })
-            });
         } else {
             // Chargements suivants : ajouter de nouvelles lignes
             const newFilteredRows = newRows.filter(row => doesRowMatchFilters(row, getActiveFilters()));
@@ -179,7 +168,6 @@ function loadData(offset, limit, isInitialLoad = false) {
                      return data.columns.map(col => row[col.join(' ')]);
                 })
             });
-            mergeTableCells(); // <-- Ajout de l'appel pour fusionner les cellules après l'ajout
         }
 
         isLoading = false;
@@ -190,7 +178,7 @@ function loadData(offset, limit, isInitialLoad = false) {
     });
 }
 
-// Fonction pour récupérer les filtres actifs, nécessaire pour la nouvelle logique
+// Fonction pour récupérer les filtres actifs
 function getActiveFilters() {
     const filters = {};
     const checkedCheckboxes = filterContainer.querySelectorAll('input[type="checkbox"]:checked');
@@ -216,49 +204,40 @@ function generateTable(data) {
     const tbody = document.createElement('tbody');
 
     const columns = data.columns;
-    const levels = columns.length > 0 ? columns[0].length : 0;
+    const levels = columns.length > 0 && Array.isArray(columns[0]) ? columns[0].length : 0;
 
+    // Génération des en-têtes de table avec colspan
     for (let level = 0; level < levels; level++) {
         const headerRow = document.createElement('tr');
-        let previousValue = null;
-        let colspan = 0;
+        let colspanCount = 1;
+        let previousValue = columns.length > 0 ? columns[0][level] : null;
 
-        columns.forEach((col, index) => {
-    const currentValue = col[level];
+        for (let i = 1; i <= columns.length; i++) {
+            const currentValue = i < columns.length ? columns[i][level] : null;
 
-    if (currentValue === previousValue) {
-        return; // <-- Correct ! Passe à l'itération suivante.
-    } else {
-                if (colspan > 1) {
-                    headerRow.lastChild.setAttribute('colspan', colspan);
-                }
+            if (currentValue === previousValue) {
+                colspanCount++;
+            } else {
                 const th = document.createElement('th');
-                th.textContent = currentValue || '';
-
-                th.classList.add(
-                    'sticky',
-                    'top-0',
-                    'z-10',
-                    'bg-[#006B45]'
-                );
-
+                th.textContent = previousValue || '';
+                th.setAttribute('colspan', colspanCount);
+                th.classList.add('sticky', 'top-0', 'z-10', 'bg-[#006B45]');
                 headerRow.appendChild(th);
-                previousValue = currentValue;
-                colspan = 1;
-            }
 
-            if (index === columns.length - 1 && colspan > 1) {
-                headerRow.lastChild.setAttribute('colspan', colspan);
+                previousValue = currentValue;
+                colspanCount = 1;
             }
-        });
+        }
         thead.appendChild(headerRow);
     }
-
+    
+    // Génération du corps de la table
     data.data.forEach(row => {
         const tr = document.createElement('tr');
         columns.forEach((col, index) => {
             const td = document.createElement('td');
-            td.textContent = row[index] || ' ';
+            const key = Array.isArray(col) ? col.join(' ') : col;
+            td.textContent = row[key] !== undefined ? row[key] : ' ';
             tr.appendChild(td);
         });
         tbody.appendChild(tr);
@@ -271,14 +250,16 @@ function generateTable(data) {
 }
 
 function appendRows(data) {
-    const table = document.querySelector('#table-container table');
+    const table = document.querySelector('#data-table');
+    if (!table) return;
     const tbody = table.querySelector('tbody') || document.createElement('tbody');
     
     data.data.forEach(row => {
         const tr = document.createElement('tr');
         data.columns.forEach((col, index) => {
             const td = document.createElement('td');
-            td.textContent = row[index] || ' ';
+            const key = Array.isArray(col) ? col.join(' ') : col;
+            td.textContent = row[key] !== undefined ? row[key] : ' ';
             tr.appendChild(td);
         });
         tbody.appendChild(tr);
@@ -304,8 +285,8 @@ function generateFilters() {
 
         const colKey = Array.isArray(col) ? col.join(' ') : col;
         let uniqueValues = [...new Set(tableData.map(row => row[colKey]))];
-        uniqueValues = uniqueValues.filter(val => val !== undefined);
-
+        uniqueValues = uniqueValues.filter(val => val !== undefined && val !== null);
+        
         if (uniqueValues.length === 0 && lastValidValues[colKey]) {
             uniqueValues = lastValidValues[colKey];
         } else if (uniqueValues.length > 0) {
@@ -357,12 +338,11 @@ function generateFilters() {
 function doesRowMatchFilters(row, filters) {
     return Object.keys(filters).every(column => {
         const filterValues = filters[column];
-        return Object.values(row).some(rowValue => filterValues.includes(rowValue));
+        return filterValues.includes(row[column]);
     });
 }
-function applyFilters() {
-    console.log("Applying filters...");
 
+function applyFilters() {
     const checkedCheckboxes = filterContainer.querySelectorAll('input[type="checkbox"]:checked');
     const filters = {};
 
@@ -381,157 +361,134 @@ function applyFilters() {
     } else {
         filteredTableData = tableData.filter(row => doesRowMatchFilters(row, filters));
     }
-
-    console.log('tableau obtenir', filteredTableData);
-
+    
     if (tableData.columns) {
         generateTable({
             columns: tableData.columns,
             data: filteredTableData.map(row => {
-                return tableData.columns.map(col => {
+                const newRow = {};
+                tableData.columns.forEach(col => {
                     const key = Array.isArray(col) ? col.join(' ') : col;
-                    return row[key];
+                    newRow[key] = row[key];
                 });
+                return newRow;
             })
         });
     }
 }
 
+// Fonction de fusion des cellules (optimisée)
 function mergeTableCells() {
-    const table = document.querySelector('#table-container table');
+    const table = document.querySelector('#data-table');
+    if (!table) return;
+
     const rows = table.rows;
     const rowCount = rows.length;
+    
+    // Fusionner les cellules pour les colonnes des "lignes"
+    const rowHeaderCount = rowColumns.length;
+    
+    if (rowCount > 1) {
+        for (let col = 0; col < rowHeaderCount; col++) {
+            let startRow = 1;
+            let startValue = rows[startRow].cells[col].innerText;
 
-    for (let col = 0; col < rows[0].cells.length; col++) {
-        let startRow = 0;
-        let value = rows[0].cells[col].innerText;
-        for (let row = 1; row <= rowCount; row++) {
-            if (row < rowCount && rows[row].cells[col].innerText === value) {
-                continue;
-            } else {
-                if (row - startRow > 1) {
-                    rows[startRow].cells[col].rowSpan = row - startRow;
-                    for (let i = startRow + 1; i < row; i++) {
-                        rows[i].cells[col].style.display = 'none';
+            for (let row = 2; row <= rowCount; row++) {
+                if (row === rowCount || rows[row].cells[col].innerText !== startValue) {
+                    if (row - startRow > 1) {
+                        rows[startRow].cells[col].rowSpan = row - startRow;
+                        for (let i = startRow + 1; i < row; i++) {
+                            rows[i].cells[col].style.display = 'none';
+                        }
                     }
-                }
-                if (row < rowCount) {
-                    startRow = row;
-                    value = rows[row].cells[col].innerText;
+                    if (row < rowCount) {
+                        startRow = row;
+                        startValue = rows[row].cells[col].innerText;
+                    }
                 }
             }
         }
     }
 }
 
-document.getElementById('download-xlsx').addEventListener('click', downloadXLSX);
-document.getElementById('download-csv').addEventListener('click', downloadCSV);
-document.getElementById('download-pdf').addEventListener('click', downloadPDF);
+// Gestion des téléchargements
+document.getElementById('download-xlsx').addEventListener('click', () => downloadFullData('xlsx'));
+document.getElementById('download-csv').addEventListener('click', () => downloadFullData('csv'));
 
-function downloadXLSX() {
-    if (!filteredTableData || filteredTableData.length === 0) {
-        alert("No data selected.");
+function downloadFullData(format) {
+    if (isLoading) {
+        alert("Veuillez patienter, un téléchargement est déjà en cours.");
         return;
     }
+    
+    isLoading = true;
 
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet([]);
-    const columns = tableData.columns;
-    const levels = columns.length > 0 ? columns[0].length : 0;
-    let rowOffset = 0;
-    ws['!merges'] = [];
-
-    for (let level = 0; level < levels; level++) {
-        const headerRow = [];
-        let previousValue = null;
-        let colspanStartIndex = 0;
-
-        columns.forEach((col, index) => {
-            const currentValue = col[level];
-
-            if (currentValue === previousValue) {
-                return;
-            } else {
-                if (previousValue !== null && index - colspanStartIndex > 1) {
-                    ws['!merges'].push({
-                        s: { r: rowOffset, c: colspanStartIndex },
-                        e: { r: rowOffset, c: index - 1 }
-                    });
-                }
-
-                headerRow.push(currentValue || '');
-                previousValue = currentValue;
-                colspanStartIndex = index;
-            }
-
-            if (index === columns.length - 1 && index - colspanStartIndex > 0) {
-                ws['!merges'].push({
-                    s: { r: rowOffset, c: colspanStartIndex },
-                    e: { r: rowOffset, c: index }
-                });
-            }
-        });
-
-        XLSX.utils.sheet_add_aoa(ws, [headerRow], { origin: rowOffset });
-        rowOffset++;
-    }
-
-    filteredTableData.forEach(row => {
-        const rowData = tableData.columns.map(col => {
-            const key = Array.isArray(col) ? col.join(' ') : col;
-            return row[key];
-        });
-
-        XLSX.utils.sheet_add_aoa(ws, [rowData], { origin: rowOffset });
-        rowOffset++;
-    });
-
-    XLSX.utils.book_append_sheet(wb, ws, 'Data');
-    XLSX.writeFile(wb, 'donnees_filtrees.xlsx');
-}
-
-function downloadCSV() {
-    if (!filteredTableData || filteredTableData.length === 0) {
-        alert("Aucune variable sélectionnée");
-        return;
-    }
-    const columns = tableData.columns;
-    const levels = columns.length > 0 ? columns[0].length : 0;
-    const headerRows = Array.from({ length: levels }, () => Array(columns.length).fill(''));
-    columns.forEach((col, colIndex) => {
-        col.forEach((value, levelIndex) => {
-            headerRows[levelIndex][colIndex] = value || '';
-        });
-    });
-    const dataRows = filteredTableData.map(row =>
-        columns.map(col => {
-            const key = Array.isArray(col) ? col.join(' ') : col;
-            return row[key] || '';
+    // Récupérer toutes les données sans pagination
+    fetch('/process_columns?offset=0&limit=999999', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            row_columns: rowColumns,
+            col_columns: colColumns,
+            value_column: 'Valeur',
+            indicateur_name: indicateur_name
         })
-    );
-    const csvContent = [
-        ...headerRows.map(row => row.map(value => {
-            if (typeof value === 'string' && (value.includes(',') || value.includes('"') || value.includes('\n'))) {
-                return `"${value.replace(/"/g, '""')}"`;
-            }
-            return value;
-        }).join(',')),
-        ...dataRows.map(row => row.map(value => {
-            if (typeof value === 'string' && (value.includes(',') || value.includes('"') || value.includes('\n'))) {
-                return `"${value.replace(/"/g, '""')}"`;
-            }
-            return value;
-        }).join(','))
-    ].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', 'donnees_filtrees.csv');
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    })
+    .then(response => {
+        if (!response.ok) throw new Error('Erreur réseau lors du téléchargement: ' + response.status);
+        return response.json();
+    })
+    .then(data => {
+        if (data.error) {
+            console.error('Erreur du serveur:', data.error);
+            alert("Erreur du serveur lors de la récupération des données.");
+            return;
+        }
+
+        const fullData = data.data.map(row => {
+            const rowData = {};
+            data.columns.forEach((col, index) => {
+                rowData[col.join(' ')] = row[index];
+            });
+            return rowData;
+        });
+
+        // Appliquer les filtres du client
+        const filters = getActiveFilters();
+        const filteredDataForDownload = fullData.filter(row => doesRowMatchFilters(row, filters));
+
+        const columnsForDownload = data.columns.map(col => col.join(' '));
+        const finalData = [columnsForDownload, ...filteredDataForDownload.map(row => columnsForDownload.map(col => row[col]))];
+
+        if (format === 'xlsx') {
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.aoa_to_sheet(finalData);
+            XLSX.utils.book_append_sheet(wb, ws, 'Données');
+            XLSX.writeFile(wb, `Données_${indicateur_name}.xlsx`);
+        } else if (format === 'csv') {
+            let csvContent = finalData.map(e => e.join(",")).join("\n");
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.setAttribute("href", URL.createObjectURL(blob));
+            link.setAttribute("download", `Données_${indicateur_name}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        }
+    })
+    .catch(error => {
+        console.error('Erreur lors du téléchargement:', error);
+        alert("Une erreur est survenue lors du téléchargement.");
+    })
+    .finally(() => {
+        isLoading = false;
+    });
 }
+
+
+document.getElementById('download-pdf').addEventListener('click', downloadPDF);
 
 function downloadPDF() {
     if (!filteredTableData || filteredTableData.length === 0) {
@@ -583,17 +540,17 @@ function downloadPDF() {
 }
 
 tableContainer.addEventListener('scroll', function () {
-    console.log('Scroll event triggered');
-    console.log('scrollTop:', tableContainer.scrollTop, 
-                'clientHeight:', tableContainer.clientHeight, 
-                'scrollHeight:', tableContainer.scrollHeight);
     if (isLoading || !hasMoreData) {
-        console.log('Scroll ignored: isLoading=', isLoading, 'hasMoreData=', hasMoreData);
         return;
     }
     if (tableContainer.scrollTop + tableContainer.clientHeight >= tableContainer.scrollHeight - 25) {
-        console.log('Loading more data: offset=', offset + limit);
         offset += limit;
         loadData(offset, limit);
     }
+});
+
+// Appeler le chargement initial au démarrage
+document.addEventListener('DOMContentLoaded', () => {
+    togglePlaceholders();
+    sendColumnsToServer();
 });
