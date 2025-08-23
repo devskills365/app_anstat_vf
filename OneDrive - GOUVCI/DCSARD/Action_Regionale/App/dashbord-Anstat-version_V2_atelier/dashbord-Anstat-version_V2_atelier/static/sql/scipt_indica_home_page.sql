@@ -138,6 +138,19 @@ CREATE TABLE `indicateurs_dashbord_region` (
     `Valeur` DECIMAL(10, 2) NOT NULL
 );
 
+CREATE TABLE `indicateurs_dashbord_national` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `Domaine` VARCHAR(255) ,
+    `Indicateur` VARCHAR(255) NOT NULL,
+    `Annee` INT NOT NULL,
+    `Source` VARCHAR(255),
+    `Definition` TEXT ,
+    `periode_production` VARCHAR(255) ,
+    `unite` VARCHAR(50) ,
+    `Valeur`  VARCHAR(50) 
+);
+
+
 
 
 

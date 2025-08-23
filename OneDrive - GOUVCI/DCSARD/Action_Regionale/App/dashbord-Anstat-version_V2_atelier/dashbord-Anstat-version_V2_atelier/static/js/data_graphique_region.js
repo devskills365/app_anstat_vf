@@ -149,70 +149,102 @@ document.addEventListener("DOMContentLoaded", function () {
             });
         });
 
-    // Proportion de la Population à moins 5 km  Centre de santé (ppcs)
-    fetch('/api/data/ppcs')
-        .then(response => response.json())
-        .then(dataIDH => {
-            var ctxIDH = document.getElementById("ppcsChart").getContext("2d");
-            new Chart(ctxIDH, {
-                type: "line",
-                data: {
-                    labels: dataIDH.map(d => d.Annee),
-                    datasets: [
-                        {
-                            label: "Proportion de la Population à moins 5 km  Centre de santé",
-                            data: dataIDH.map(d => d.Valeur),
-                            borderColor: "green",
-                            fill: false,
-                        },
-                    ],
-                },
-                options: {
-                    scales: {
-                        y: { beginAtZero: true, max: 100 },
-                    },
-                },
-            });
-        });
+// Proportion de la Population à moins 5 km Centre de santé (ppcs)
+// Proportion de la Population à moins 5 km Centre de santé (ppcs)
+fetch('/api/data/ppcs')
+    .then(response => response.json())
+    .then(dataIDH => {
+        // Vérifier les données dans la console pour débogage
+        console.log('Données reçues :', dataIDH);
 
-    // Taux de Chômage
-    fetch('/api/data/taux-chomage')
-        .then(response => response.json())
-        .then(dataTauxChomage => {
-            var ctxTauxChomage = document.getElementById("tauxChomageChart").getContext("2d");
-            new Chart(ctxTauxChomage, {
-                type: "line",
-                data: {
-                    labels: dataTauxChomage.map(d => d.year),
-                    datasets: [
-                        {
-                            label: "Taux",
-                            data: dataTauxChomage.map(d => d.taux),
-                            borderColor: "#e09705",
-                            fill: false,
-                            pointBackgroundColor: "#e09705",
-                            pointBorderColor: "#e09705",
-                        },
-                    ],
-                },
-                options: {
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: { stepSize: 2 },
-                            title: { display: true, text: "Taux (%)" },
-                        },
-                        x: {
-                            title: { display: false, text: "Année" },
-                        },
+        var ctxIDH = document.getElementById("ppcsChart").getContext("2d");
+        new Chart(ctxIDH, {
+            type: "line",
+            data: {
+                labels: dataIDH.map(d => Number(d.Annee)), // Convertir les années en nombres
+                datasets: [
+                    {
+                        label: "Proportion(%)",
+                        data: dataIDH.map(d => Number(d.Valeur)), // Convertir les valeurs en nombres
+                        borderColor: "green",
+                        fill: false,
+                        pointBackgroundColor: "green",
+                        pointBorderColor: "green",
                     },
-                    plugins: {
-                        legend: { display: true, position: "top" },
+                ],
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        title: { display: true, text: "Proportion(%)" },
+                    },
+                    x: {
+                        title: { display: true, text: "Année" },
+                    
+                        type: 'linear',
+                        ticks: {
+                            stepSize: 1,
+                            callback: function(value) {
+                                return Number.isInteger(value) ? value : null; // Afficher uniquement les années entières
+                            }
+                        }
                     },
                 },
-            });
+                plugins: {
+                    legend: { display: true, position: "top" },
+                },
+            },
         });
+    })
+    .catch(error => console.error('Erreur lors du chargement des données :', error));
 
+   // Nombre de lits pour 1000 Habitants
+fetch('/api/data/nbre-lit-hbts')
+    .then(response => response.json())
+    .then(dataTauxChomage => {
+        var ctxTauxChomage = document.getElementById("nbreLit1000HbtsChart").getContext("2d");
+        new Chart(ctxTauxChomage, {
+            type: "line",
+            data: {
+                labels: dataTauxChomage.map(d => d.Annee),
+                datasets: [
+                    {
+                        label: "proportion(‰)",
+                        data: dataTauxChomage.map(d => d.Valeur),
+                        borderColor: "#e09705",
+                        fill: false,
+                        pointBackgroundColor: "#e09705",
+                        pointBorderColor: "#e09705",
+                    },
+                ],
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { stepSize: 2 },
+                        title: { display: true, text: "Proportion(‰)" },
+                    },
+                    x: {
+                        title: { display: true, text: "Année" }, // Afficher le titre de l'axe X si nécessaire
+                
+                        type: 'linear', // Spécifier le type d'échelle comme linéaire
+                        ticks: {
+                            stepSize: 1, // Une étape par année
+                            callback: function(value) {
+                                return Number.isInteger(value) ? value : null; // Afficher uniquement les années entières
+                            }
+                        }
+                    },
+                },
+                plugins: {
+                    legend: { display: true, position: "top" },
+                },
+            },
+        });
+    });
     // Population Urbaine vs Rurale
     fetch('/api/data/population-urbaine-rurale')
         .then(response => response.json())

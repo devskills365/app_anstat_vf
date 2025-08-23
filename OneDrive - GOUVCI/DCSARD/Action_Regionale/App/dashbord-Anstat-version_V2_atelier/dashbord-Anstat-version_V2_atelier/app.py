@@ -22,7 +22,10 @@ import import_publications as conf_pub
 global region_publication
 region_publication="PORO"# Cette variable va nous permettre 
 #https://colab.research.google.com/drive/1oBqwcSMb4YTrn0NFUiQzJCiZ65uIay_S?hl=fr#scrollTo=CJAQGVAWNNPw
-
+# Pour transformer les données des indicateurs nationaux (fichier du directeur)
+#https://colab.research.google.com/drive/1JUqEvhPJQErgB1DPo87JzXu1FlpqTZm8
+# Pour inserer les données dans json
+#https://colab.research.google.com/drive/1W-OEye7rhuI4s_hJUOESPJfeJIKbPY-h
 
 # Configuration du logger pour le débogage
 logging.basicConfig(level=logging.DEBUG)
@@ -148,7 +151,7 @@ def population_data():
 
 
 
-  
+ # Page principale (home page) 
 @app.route('/')
 def list_regions():
     regions =  qr.options_regions() # or qr.options_regions()
@@ -161,11 +164,60 @@ def list_regions():
                            pop_minute=pop_minute,
                            regions=regions)
 
+#------------------pour la page home , les indicateurs clés
+## Indicateurs nationaux________________________________________Nationaux
+@app.route('/api/data/ihpc')
+def get_ihpc():
+    query = """
+    SELECT
+        Annee,
+        ROUND(Valeur, 2) AS Valeur
+    FROM
+        indicateurs_dashbord_national
+    WHERE
+        Indicateur = 'Inflation annuelle moyenne (IHPC – ANStat)'
+    ORDER BY
+        Annee
+    """
+    data = fetch_and_format(query)
+    return jsonify(data)
+
+@app.route('/api/data/ipc')
+def get_ipc():
+    query = """
+    SELECT
+        Annee,
+        ROUND(Valeur, 2) AS Valeur
+    FROM
+        indicateurs_dashbord_national
+    WHERE
+        Indicateur = 'Indice de Perception de la Corruption (IPC)'
+    ORDER BY
+        Annee
+    """
+    data = fetch_and_format(query)
+    return jsonify(data)
+
+
+@app.route('/api/data/sante-budget')
+def get_sante_budget():
+    query = """
+    SELECT
+        Annee,
+        ROUND(Valeur, 2) AS Valeur
+    FROM
+        indicateurs_dashbord_national
+    WHERE
+        Indicateur = 'Dépenses publiques consacrées à la santé en  pourcentage du budget'
+    ORDER BY
+        Annee
+    """
+    data = fetch_and_format(query)
+    return jsonify(data)
+
+
 
 #Bloc du dashbord------------------------------------------Pour le tableau de bord par région
-
-
-
 
 
 # Générer les données pour toutes les régions restantes
@@ -185,16 +237,15 @@ def region_vitrine(region):
                            region_name=region_publication,  
                            all_regions=regions) 
 
-#--------------------------------------------------Fin du tableau de 
+
+
+
 #_____________________________________________________________________Pour filtrer les données pour région
-
-
 
 @app.route('/api/data/ratio-eleve-enseignant')
 def get_ratio_eleve_enseignant():
     global region_publication
     region=region_publication.capitalize()
-    print('______________publication:',region_publication)
     print('Région de filtre:',region)
     data = fetch_and_format('SELECT departement, year, ratio FROM ratios_eleve_enseignant WHERE region = %s ORDER BY departement, year', (region,))
     formatted_data = {}
@@ -252,19 +303,20 @@ def get_ppcs():
     data = fetch_and_format(query, (region,))
     return jsonify(data)
 
-@app.route('/api/data/taux-chomage')
-def get_taux_chomage():
+@app.route('/api/data/nbre-lit-hbts')
+def get_nbre_lit_1000_hbts():
     global region_publication
-    region=region_publication.capitalize()
-    data = fetch_and_format("SELECT year, taux FROM taux_chomage WHERE region = %s ORDER BY year", (region,))
+    region=region_publication
+    query = """
+    SELECT Annee,Valeur
+    FROM indicateurs_dashbord_region
+    WHERE Region = %s AND Indicateur = 'Nombre de lits pour 1000 Habitants'
+    ORDER BY Annee
+    """
+    data = fetch_and_format(query, (region,))
     return jsonify(data)
 
-@app.route('/api/data/population-urbaine-rurale')
-def get_pop_urb_rur():
-    global region_publication
-    region=region_publication.capitalize()
-    data = fetch_and_format("SELECT type_pop, count FROM population_urbaine_rurale WHERE region = %s", (region,))
-    return jsonify(data)
+
 
 @app.route('/api/data/taux-alphabetisation')
 def get_taux_alphabetisation():

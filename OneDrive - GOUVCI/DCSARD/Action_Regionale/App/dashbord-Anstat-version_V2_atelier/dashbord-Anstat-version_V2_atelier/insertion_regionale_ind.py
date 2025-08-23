@@ -1,6 +1,7 @@
 import pandas as pd
 import mysql.connector
 from mysql.connector import Error
+import numpy as np
 
 # Database and file path configurations
 DB_CONFIG = {
@@ -9,7 +10,86 @@ DB_CONFIG = {
     'host': '127.0.0.1',
     'database': 'annuaire'
 }
+#EXCEL_FILE_PATH = 'C:/Users/DELL/OneDrive - GOUVCI/DCSARD/Action_Regionale/App/dashbord-Anstat-version_V2_atelier/dashbord-Anstat-version_V2_atelier/static/data/indica_nationaux_ok.xlsx'
+#MATRICE_COLLECTE_SANTE
 EXCEL_FILE_PATH = 'C:/Users/DELL/OneDrive - GOUVCI/DCSARD/Action_Regionale/App/dashbord-Anstat-version_V2_atelier/dashbord-Anstat-version_V2_atelier/static/data/MATRICE_COLLECTE_SANTE.xlsx'
+def insert_data_nat_from_excel():
+    conn = None
+    try:
+        conn = mysql.connector.connect(**DB_CONFIG)
+        cursor = conn.cursor()
+        print("Connexion à la base de données réussie.")
+
+        df = pd.read_excel(EXCEL_FILE_PATH, engine='openpyxl')
+        print("Fichier Excel lu avec succès.")
+
+        print('Colonnes dans excel:', df.columns.tolist())
+        print('Premières lignes:', df.head().to_dict())
+
+        df = df.loc[:, ~df.columns.isna()]
+        df = df.loc[:, df.columns.str.strip() != '']
+
+        excel_to_sql_map = {
+            'Domaine': 'Domaine',
+            'Indicateur': 'Indicateur',
+            'Définition': 'Definition',
+            'Unité': 'unite',
+            'Source': 'Source',
+            'Périodicité de production': 'periode_production',
+            'Annee': 'Annee',
+            'Valeur': 'Valeur'
+        }
+        
+        df.rename(columns=excel_to_sql_map, inplace=True)
+        
+        # Check if all required columns are present after renaming
+        # REORDER THE LIST TO MATCH THE INSERT QUERY
+        required_sql_columns = ['Domaine', 'Indicateur', 'Annee', 'Source', 'Definition', 'periode_production', 'unite', 'Valeur']
+        
+        if not all(col in df.columns for col in required_sql_columns):
+            raise ValueError(f"Certaines colonnes requises sont manquantes après le renommage. Colonnes attendues : {required_sql_columns}, Colonnes trouvées : {df.columns.tolist()}")
+
+        df_filtered = df[required_sql_columns]
+
+        # Replacing nan with None
+        df_filtered = df_filtered.replace({np.nan: None})
+        for col in df_filtered.columns:
+            if df_filtered[col].dtype == 'object':
+                df_filtered[col] = df_filtered[col].replace({'': None, 'nan': None})
+
+        cursor.execute("TRUNCATE TABLE `indicateurs_dashbord_national`")
+        print("Table 'indicateurs_dashbord_national' vidée pour la réinsertion.")
+
+        insert_query = """
+        INSERT INTO `indicateurs_dashbord_national` 
+        (`Domaine`, `Indicateur`, `Annee`, `Source`, `Definition`, `periode_production`, `unite`, `Valeur`)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """
+        data_to_insert = [tuple(row) for row in df_filtered.itertuples(index=False, name=None)]
+
+        print("Nombre total de lignes à insérer :", len(data_to_insert))
+        if not data_to_insert:
+            print("Aucune ligne valide à insérer.")
+        else:
+            print("Premières 5 lignes à insérer:", data_to_insert[:5])
+            cursor.executemany(insert_query, data_to_insert)
+            conn.commit()
+            print(f"{cursor.rowcount} lignes insérées avec succès.")
+
+    except Error as e:
+        print(f"Erreur d'insertion dans la base de données : {e}")
+        if conn and conn.is_connected():
+            conn.rollback()
+    except Exception as e:
+        print(f"Erreur dans le traitement des données : {e}")
+        if conn and conn.is_connected():
+            conn.rollback()
+    finally:
+        if conn and conn.is_connected():
+            cursor.close()
+            conn.close()
+            print("Connexion MySQL fermée.")
+
 
 def insert_data_from_excel():
     conn = None
