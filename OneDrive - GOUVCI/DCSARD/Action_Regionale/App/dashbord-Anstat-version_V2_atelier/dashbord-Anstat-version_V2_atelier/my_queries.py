@@ -18,7 +18,7 @@ load_dotenv()
 # Utiliser les variables d'environnement pour MySQL
 host = os.getenv('MYSQL_HOST')
 database = os.getenv('MYSQL_DATABASE')
-#database2 = os.getenv('MYSQL_DATABASE2')
+
 user = os.getenv('MYSQL_USER')
 password = os.getenv('MYSQL_PASSWORD')
 
@@ -207,54 +207,8 @@ def autocompletion():
         print(f"Erreur lors de la récupération des données MySQL : {e}")
         return pd.DataFrame()
 
-#.filter(V1Indicateur.Region == region_name)
-# Récupérer des données depuis MySQL pour une région spécifique
-def get_data_from_mysql_VR(region_name,offset=0, limit=25):
-    try:
-        query = session.query(
-            V1Indicateur.Dimension,
-            V1Indicateur.Modalites,
-            V1Indicateur.Indicateurs,
-            V1Indicateur.Annee,
-            V1Indicateur.Valeur
-        ).filter(V1Indicateur.Region == region_name).offset(offset).limit(limit)
-        
-        df = pd.read_sql(query.statement, engine)
-        return df
-    except Exception as e:
-        print(f"Erreur lors de la récupération des données MySQL : {e}")
-        return pd.DataFrame()
 
-# Insérer des données depuis un fichier Excel dans la base de données
-def insert_data_from_excel_optimized(file_path):
-    try:
-        # Lire le fichier Excel
-        df = pd.read_excel(file_path)
-        df.columns = ['Dimension', 'Modalites', 'Indicateurs', 'Annee', 'Valeur']
-        
-        # Nettoyer la colonne 'Valeur'
-        # 1. Convertir en chaîne de caractères pour pouvoir appliquer les méthodes de nettoyage
-        df['Valeur'] = df['Valeur'].astype(str)
-        # 2. Remplacer les virgules par des points
-        df['Valeur'] = df['Valeur'].str.replace(',', '.', regex=False)
-        # 3. Supprimer tout caractère non numérique, à l'exception des points décimaux
-        df['Valeur'] = df['Valeur'].str.replace(r'[^\d.]', '', regex=True)
-        # 4. Convertir la colonne en un type numérique
-        # Les valeurs vides ou non convertibles deviennent NaN
-        df['Valeur'] = pd.to_numeric(df['Valeur'])
-        
-        # Utiliser `to_sql` pour insérer les données
-        # Le moteur d'insertion gérera la conversion de NaN en NULL
-        df.to_sql('V1_indicateur', con=engine, if_exists='append', index=False)
-        
-        print("✅ Données insérées avec succès dans la table V1_indicateur.")
-        
-    except Exception as e:
-        print(f"❌ Erreur lors de l'insertion des données : {e}")
 
-        
-file_path='C:/Users/DELL/OneDrive - GOUVCI/DCSARD/Action_Regionale/App/dashbord-Anstat-version_V2_atelier/dashbord-Anstat-version_V2_atelier/static/data/indica_nat_req_ok.xlsx'
 
-if __name__=='__main__':
-    insert_data_from_excel_optimized(file_path)
+
 

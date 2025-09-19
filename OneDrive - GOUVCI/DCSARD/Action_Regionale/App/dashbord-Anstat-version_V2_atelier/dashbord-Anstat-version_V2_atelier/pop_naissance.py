@@ -1,5 +1,4 @@
 from datetime import datetime
-
 def days_in_year(year):
     # Retourne 366 si bissextile, 365 sinon
     return 366 if (year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)) else 365
@@ -54,10 +53,3 @@ def naissance_deces_pop():
     pop_actuelle = population_base + int(population_annuelle / minutes * elapsed_minutes)
 
     return naissance_cumulee, deces_cumule, pop_actuelle
-
-# Exemple d'utilisation
-if __name__ == "__main__":
-    naissances, deces, population = naissance_deces_pop()
-    print(f"Naissances cumulées : {naissances}")
-    print(f"Décès cumulés : {deces}")
-    print(f"Population actuelle : {population}")

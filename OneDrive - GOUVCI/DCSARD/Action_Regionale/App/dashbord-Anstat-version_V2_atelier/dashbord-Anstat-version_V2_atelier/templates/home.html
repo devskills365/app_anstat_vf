@@ -136,20 +136,32 @@
         </div>
     </div>
 
-    <div class="charts-row-container mx-auto px-4 py-8 flex flex-col md:flex-row gap-6">
-        <div class="chart-card flex-1 bg-white p-6 rounded-xl shadow-lg">
-            <h5 class="text-[#49655A] text-lg font-semibold mb-4">Indice de Perception de la Corruption (IPC)</h5>
-            <div class="chart-container"><canvas id="chart-line-ipc"></canvas></div>
-        </div>
-        <div class="chart-card flex-1 bg-white p-6 rounded-xl shadow-lg">
-            <h5 class="text-[#49655A] text-lg font-semibold mb-4">Inflation annuelle moyenne (IHPC – ANStat)</h5>
-            <div class="chart-container"><canvas id="chart-line-enrollment"></canvas></div>
-        </div>
-        <div class="chart-card flex-1 bg-white p-6 rounded-xl shadow-lg">
-            <h5 class="text-[#49655A] text-lg font-semibold mb-4">Dépenses publiques consacrées à la santé en  pourcentage du budget</h5>
-            <div class="chart-container"><canvas id="chart-bar-sante-budget"></canvas></div>
-        </div>
+ <div class="charts-row-container mx-auto px-4 py-8 flex flex-col md:flex-row gap-6">
+    <div class="chart-card flex-1 bg-white p-6 rounded-xl shadow-lg">
+        <a href="#" onclick="redirectToSearch('Indice de Perception de la Corruption (IPC)'); return false;">
+            <h5 class="text-[#49655A] text-lg font-semibold mb-4 hover:underline cursor-pointer">
+                Indice de Perception de la Corruption (IPC)
+            </h5>
+        </a>
+        <div class="chart-container"><canvas id="chart-line-ipc"></canvas></div>
     </div>
+    <div class="chart-card flex-1 bg-white p-6 rounded-xl shadow-lg">
+        <a href="#" onclick="redirectToSearch('Inflation annuelle moyenne (IHPC – ANStat)'); return false;">
+            <h5 class="text-[#49655A] text-lg font-semibold mb-4 hover:underline cursor-pointer">
+                Inflation annuelle moyenne (IHPC – ANStat)
+            </h5>
+        </a>
+        <div class="chart-container"><canvas id="chart-line-enrollment"></canvas></div>
+    </div>
+    <div class="chart-card flex-1 bg-white p-6 rounded-xl shadow-lg">
+        <a href="#" onclick="redirectToSearch('Dépenses publiques consacrées à la santé en pourcentage du budget'); return false;">
+            <h5 class="text-[#49655A] text-lg font-semibold mb-4 hover:underline cursor-pointer">
+                Dépenses publiques consacrées à la santé en pourcentage du budget
+            </h5>
+        </a>
+        <div class="chart-container"><canvas id="chart-bar-sante-budget"></canvas></div>
+    </div>
+</div>
 
     <footer class="bg-[#49655A] text-white py-6 mt-8">
         <div class="container mx-auto px-4 flex flex-col md:flex-row justify-between items-center">
@@ -534,6 +546,14 @@
                 .attr("fill", d => colorScale(d.properties.Population))
                 .attr("stroke", "none");
         }
+    </script>
+    <script>
+        // Fonction de redirection pour les titres de graphiques
+// Fonction de redirection pour les titres de graphiques
+function redirectToSearch(indicatorName) {
+    const searchUrl = `/filter_indicator/${encodeURIComponent(indicatorName)}`;
+    window.location.href = searchUrl;
+}
     </script>
 </body>
 </html>

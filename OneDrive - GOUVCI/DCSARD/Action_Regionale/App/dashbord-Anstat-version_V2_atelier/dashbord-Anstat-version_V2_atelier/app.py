@@ -2,6 +2,8 @@ from flask import Flask, render_template, request, redirect, url_for, flash, ses
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 import os
+import pop_naissance
+import utils
 import logging
 import pandas as pd
 import urllib
@@ -19,6 +21,18 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 config_pub_path = os.path.join(current_dir, 'config_pub')
 sys.path.append(config_pub_path)
 import import_publications as conf_pub
+from models import (  # Import models from the corrected models.py
+    IndicateursDashbordNational,
+    IndicateursDashbordRegion,
+    RatiosEleveEnseignant,
+    TauxNatalite,
+    PopulationRegionale,
+    PersonnelMedical,
+    TauxAlphabetisation,
+    TauxBruteScolarite,
+    TauxElectrification
+)
+
 global region_publication
 region_publication="PORO"# Cette variable va nous permettre 
 #https://colab.research.google.com/drive/1oBqwcSMb4YTrn0NFUiQzJCiZ65uIay_S?hl=fr#scrollTo=CJAQGVAWNNPw
@@ -29,35 +43,8 @@ region_publication="PORO"# Cette variable va nous permettre
 
 # Configuration du logger pour le débogage
 logging.basicConfig(level=logging.DEBUG)
-# Configuration de la clé secrète pour les sessions Flask
-#_____________________________________________________________________________Pour région
-from flask import Flask, jsonify, render_template, g
-import mysql.connector
-# Fonction pour obtenir la connexion à la base de données MySQL
-
-def get_db():
-    if not hasattr(g, 'mysql_db'):
-        g.mysql_db = mysql.connector.connect(
-            user=os.getenv('MYSQL_USER'),
-            password=os.getenv('MYSQL_PASSWORD'),
-            host=os.getenv('MYSQL_HOST'),
-            database=os.getenv('MYSQL_DATABASE')
-        )
-    return g.mysql_db
 
 
-
-# Fonction utilitaire pour récupérer des données et les formater en dictionnaire
-def fetch_and_format(query, params=None):
-    db = get_db()
-    cursor = db.cursor(dictionary=True) # dictionary=True pour obtenir des dictionnaires
-    if params:
-        cursor.execute(query, params)
-    else:
-        cursor.execute(query)
-    data = cursor.fetchall()
-    cursor.close()
-    return data
 
 
 #_________________________________________________________________Fin région, seulement les departement
@@ -66,75 +53,10 @@ def fetch_and_format(query, params=None):
 def get_population():
     data = ml.Population.query.all()
     return jsonify([{'year': item.year, 'population': item.population} for item in data])
-#Taux de scolarité brut national
-@app.route('/api/school_enrollment', methods=['GET'])
-def get_school_enrollment():
-    data = ml.SchoolEnrollment.query.all()
-    return jsonify([{'year': item.year, 'enrollment_rate': item.enrollment_rate} for item in data])
-#Pour les données sur la population et distribution par age
-@app.route('/api/age_distribution', methods=['GET'])
-def get_age_distribution():
-    data = ml.AgeDistribution.query.filter_by(year=2023).all()  # Filtrer par année si besoin
-    return jsonify([{'age_group': item.age_group, 'population': item.population} for item in data])
-
-def days_in_year(year):
-    # Retourne 366 si bissextile, 365 sinon
-    return 366 if (year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)) else 365
-
-def minutes_in_year(year):
-    # Calcule le nombre total de minutes dans une année
-    return days_in_year(year) * 24 * 60
-
-def naissance_deces_pop():
-    # Données démographiques prédéfinies
-    data_nais_deces_pop = {
-        "population": [777556, 797114, 793064, 787604, 804768, 796472],
-        "population_add": [31719274, 32496830, 33293944, 34087008, 34874612, 35679380],
-        "naissance": [1025716, 1047630, 1045355, 1041416, 1061168, 1054794],
-        "deces": [248159, 250517, 252290, 253814, 256397, 258324],
-        "year": [2025 + i for i in range(6)]  # 2025 à 2030
-    }
-
-    # Année actuelle
-    current_year = datetime.now().year
-
-    # Vérifier si l'année est dans les données
-    if current_year not in data_nais_deces_pop["year"]:
-        return f"Données non disponibles pour l'année {current_year}"
-
-    # Index de l'année actuelle
-    index = data_nais_deces_pop["year"].index(current_year)
-
-    # Dates de référence et actuelle
-    date_ref = datetime(current_year, 1, 1)  # Début de l'année
-    date_actu = datetime.now()
-
-    # Nombre de jours écoulés
-    elapsed_days = (date_actu - date_ref).days
-
-    # Nombre de minutes écoulées
-    elapsed_minutes = (date_actu - date_ref).total_seconds() / 60
-
-    # Données annuelles
-    naissance_annuelle = data_nais_deces_pop["naissance"][index]
-    deces_annuel = data_nais_deces_pop["deces"][index]
-    population_annuelle = data_nais_deces_pop["population"][index]
-    population_base = data_nais_deces_pop["population_add"][index]
-
-    # Calculs
-    days = days_in_year(current_year)
-    minutes = minutes_in_year(current_year)
-
-    # Naissances et décès cumulés jusqu'à maintenant
-    naissance_cumulee = int(naissance_annuelle / days) * elapsed_days
-    deces_cumule = int(deces_annuel / days) * elapsed_days
-    pop_actuelle = population_base + int(population_annuelle / minutes * elapsed_minutes)
-
-    return naissance_cumulee, deces_cumule, pop_actuelle
 
 @app.route('/population_data')
 def population_data():
-    result = naissance_deces_pop()
+    result = pop_naissance.naissance_deces_pop()
     now = datetime.now()
 
     if isinstance(result, dict) and "error" in result:  # Gestion d'erreur
@@ -155,7 +77,7 @@ def population_data():
 @app.route('/')
 def list_regions():
     regions =  qr.options_regions() # or qr.options_regions()
-    naissance, deces, pop_minute = naissance_deces_pop()
+    naissance, deces, pop_minute = pop_naissance.naissance_deces_pop()
     
     # We no longer pass graph data to the template. It's fetched via API.
     return render_template('home.html',
@@ -166,61 +88,230 @@ def list_regions():
 
 #------------------pour la page home , les indicateurs clés
 ## Indicateurs nationaux________________________________________Nationaux
+from sqlalchemy import func
+
+from sqlalchemy import func
+from flask import jsonify
+
 @app.route('/api/data/ihpc')
 def get_ihpc():
-    query = """
-    SELECT
-        Annee,
-        ROUND(Valeur, 2) AS Valeur
-    FROM
-        indicateurs_dashbord_national
-    WHERE
-        Indicateur = 'Inflation annuelle moyenne (IHPC – ANStat)'
-    ORDER BY
-        Annee
-    """
-    data = fetch_and_format(query)
-    return jsonify(data)
+    # Exécution de la requête SQLAlchemy
+    data = db.session.query(
+        IndicateursDashbordNational.Annee,
+        func.round(IndicateursDashbordNational.Valeur, 2).label('Valeur')
+    ).filter(
+        IndicateursDashbordNational.Indicateur == 'Inflation annuelle moyenne (IHPC – ANStat)'
+    ).order_by(
+        IndicateursDashbordNational.Annee
+    ).all()
+    
+    # Transformation des résultats SQLAlchemy en dictionnaire
+    formatted_data = [{'Annee': row.Annee, 'Valeur': float(row.Valeur) if row.Valeur is not None else None} for row in data]
+    
+    # Renvoyer directement la réponse JSON
+    return jsonify(formatted_data)
+
+from sqlalchemy import func
+from flask import jsonify
 
 @app.route('/api/data/ipc')
 def get_ipc():
-    query = """
-    SELECT
-        Annee,
-        ROUND(Valeur, 2) AS Valeur
-    FROM
-        indicateurs_dashbord_national
-    WHERE
-        Indicateur = 'Indice de Perception de la Corruption (IPC)'
-    ORDER BY
-        Annee
-    """
-    data = fetch_and_format(query)
-    return jsonify(data)
+    data = db.session.query(
+        IndicateursDashbordNational.Annee,
+        func.round(IndicateursDashbordNational.Valeur, 2).label('Valeur')
+    ).filter(
+        IndicateursDashbordNational.Indicateur == 'Indice de Perception de la Corruption (IPC)'
+    ).order_by(
+        IndicateursDashbordNational.Annee
+    ).all()
+    
+    # Correctly format the data for JSON output
+    formatted_data = [{'Annee': row.Annee, 'Valeur': float(row.Valeur) if row.Valeur is not None else None} for row in data]
+    return jsonify(formatted_data)
 
+
+from sqlalchemy import func
+from flask import jsonify
 
 @app.route('/api/data/sante-budget')
 def get_sante_budget():
-    query = """
-    SELECT
-        Annee,
-        ROUND(Valeur, 2) AS Valeur
-    FROM
-        indicateurs_dashbord_national
-    WHERE
-        Indicateur = 'Dépenses publiques consacrées à la santé en  pourcentage du budget'
-    ORDER BY
-        Annee
-    """
-    data = fetch_and_format(query)
-    return jsonify(data)
+    data = db.session.query(
+        IndicateursDashbordNational.Annee,
+        func.round(IndicateursDashbordNational.Valeur, 2).label('Valeur')
+    ).filter(
+        IndicateursDashbordNational.Indicateur == 'Dépenses publiques consacrées à la santé en  pourcentage du budget'
+    ).order_by(
+        IndicateursDashbordNational.Annee
+    ).all()
+    
+    # Correctly format the data for JSON output
+    formatted_data = [{'Annee': row.Annee, 'Valeur': float(row.Valeur) if row.Valeur is not None else None} for row in data]
+    return jsonify(formatted_data)
+
+from flask import jsonify
+
+@app.route('/api/data/ratio-eleve-enseignant')
+def get_ratio_eleve_enseignant():
+    global region_publication
+    region = region_publication.capitalize()
+    print('Région de filtre:', region)
+    
+    data = RatiosEleveEnseignant.query.filter_by(
+        region=region
+    ).order_by(
+        RatiosEleveEnseignant.departement, 
+        RatiosEleveEnseignant.year
+    ).all()
+    
+    formatted_data = {}
+    for row in data:
+        departement = row.departement
+        if departement not in formatted_data:
+            formatted_data[departement] = []
+        # Correctly format the decimal value
+        formatted_data[departement].append({'year': row.year, 'ratio': float(row.ratio) if row.ratio is not None else None})
+    
+    return jsonify(formatted_data)
+
+from flask import jsonify
+
+@app.route('/api/data/taux-natalite')
+def get_taux_natalite():
+    global region_publication
+    region = region_publication.capitalize()
+    
+    data = TauxNatalite.query.filter_by(
+        region=region
+    ).order_by(
+        TauxNatalite.departement, 
+        TauxNatalite.year
+    ).all()
+    
+    formatted_data = {}
+    for row in data:
+        departement = row.departement
+        if departement not in formatted_data:
+            formatted_data[departement] = []
+        # Correctly format the decimal value
+        formatted_data[departement].append({'year': row.year, 'natalite': float(row.natalite) if row.natalite is not None else None})
+    
+    return jsonify(formatted_data)
+
+@app.route('/api/data/population')
+def get_population_regionale():
+    global region_publication
+    region = region_publication.capitalize()
+    
+    data = PopulationRegionale.query.filter_by(region=region).all()
+    
+    # Transformation en liste de dictionnaires
+    formatted_data = [{'departement': row.departement, 'hommes': row.hommes, 'femmes': row.femmes} for row in data]
+    return jsonify(formatted_data)
+
+@app.route('/api/data/personnel-medical')
+def get_personnel_medical():
+    global region_publication
+    region = region_publication.capitalize()
+    
+    data = PersonnelMedical.query.filter_by(
+        region=region
+    ).order_by(
+        PersonnelMedical.corps
+    ).all()
+    
+    formatted_data = {}
+    for row in data:
+        corps = row.corps
+        if corps not in formatted_data:
+            formatted_data[corps] = {}
+        formatted_data[corps][row.departement] = row.nombre
+    
+    return jsonify(formatted_data)
+
+from flask import jsonify
+
+@app.route('/api/data/ppcs')
+def get_ppcs():
+    global region_publication
+    region = region_publication
+    
+    data = IndicateursDashbordRegion.query.filter(
+        IndicateursDashbordRegion.Region == region,
+        IndicateursDashbordRegion.Indicateur == 'Proportion de la population vivant à moins de 5 Km d’un centre de santé'
+    ).order_by(
+        IndicateursDashbordRegion.Annee
+    ).all()
+    
+    # Correctly format the decimal value
+    formatted_data = [{'Annee': row.Annee, 'Valeur': float(row.Valeur) if row.Valeur is not None else None} for row in data]
+    return jsonify(formatted_data)
+
+from flask import jsonify
+
+@app.route('/api/data/nbre-lit-hbts')
+def get_nbre_lit_1000_hbts():
+    global region_publication
+    region = region_publication
+    
+    data = IndicateursDashbordRegion.query.filter(
+        IndicateursDashbordRegion.Region == region,
+        IndicateursDashbordRegion.Indicateur == 'Nombre de lits pour 1000 Habitants'
+    ).order_by(
+        IndicateursDashbordRegion.Annee
+    ).all()
+    
+    # Correctly format the decimal value
+    formatted_data = [{'Annee': row.Annee, 'Valeur': float(row.Valeur) if row.Valeur is not None else None} for row in data]
+    return jsonify(formatted_data)
 
 
+@app.route('/api/data/taux-alphabetisation')
+def get_taux_alphabetisation():
+    global region_publication
+    region = region_publication.capitalize()
+    
+    data = TauxAlphabetisation.query.filter_by(
+        region=region
+    ).order_by(
+        TauxAlphabetisation.year
+    ).all()
+    
+    # Correctly format the decimal value
+    formatted_data = [{'year': row.year, 'taux': float(row.taux) if row.taux is not None else None} for row in data]
+    return jsonify(formatted_data)
+
+@app.route('/api/data/taux-brute-scolarite')
+def get_taux_brute_scolarite():
+    global region_publication
+    region = region_publication.capitalize()
+    
+    data = TauxBruteScolarite.query.filter_by(
+        region=region
+    ).order_by(
+        TauxBruteScolarite.year
+    ).all()
+    
+    # Correctly format the decimal value
+    formatted_data = [{'year': row.year, 'taux': float(row.taux) if row.taux is not None else None} for row in data]
+    return jsonify(formatted_data)
+
+from flask import jsonify
+
+@app.route('/api/data/taux-electrification')
+def get_taux_electrification():
+    global region_publication
+    region = region_publication.capitalize()
+    
+    data = TauxElectrification.query.filter_by(
+        region=region
+    ).order_by(
+        TauxElectrification.year
+    ).all()
+    
+    formatted_data = [{'year': row.year, 'nombre': row.nombre} for row in data]
+    return jsonify(formatted_data)
 
 #Bloc du dashbord------------------------------------------Pour le tableau de bord par région
-
-
-
 @app.route('/region_vitrine/<region>')  
 def region_vitrine(region):  
     global region_publication
@@ -230,115 +321,6 @@ def region_vitrine(region):
                          
                            region_name=region_publication,  
                           ) 
-
-
-
-
-#_____________________________________________________________________Pour filtrer les données pour région
-
-@app.route('/api/data/ratio-eleve-enseignant')
-def get_ratio_eleve_enseignant():
-    global region_publication
-    region=region_publication.capitalize()
-    print('Région de filtre:',region)
-    data = fetch_and_format('SELECT departement, year, ratio FROM ratios_eleve_enseignant WHERE region = %s ORDER BY departement, year', (region,))
-    formatted_data = {}
-    for row in data:
-        departement = row['departement']
-        if departement not in formatted_data:
-            formatted_data[departement] = []
-        formatted_data[departement].append({'year': row['year'], 'ratio': row['ratio']})
-    return jsonify(formatted_data)
-
-@app.route('/api/data/taux-natalite')
-def get_taux_natalite():
-    global region_publication
-    region=region_publication.capitalize()
-    data = fetch_and_format('SELECT departement, year, natalite FROM taux_natalite WHERE region = %s ORDER BY departement, year', (region,))
-    formatted_data = {}
-    for row in data:
-        departement = row['departement']
-        if departement not in formatted_data:
-            formatted_data[departement] = []
-        formatted_data[departement].append({'year': row['year'], 'natalite': row['natalite']})
-    return jsonify(formatted_data)
-
-@app.route('/api/data/population')
-def get_population_regionale():
-    global region_publication
-    region=region_publication.capitalize()
-    data = fetch_and_format('SELECT departement, hommes, femmes FROM population_regionale WHERE region = %s', (region,))
-    return jsonify(data)
-
-@app.route('/api/data/personnel-medical')
-def get_personnel_medical():
-    global region_publication
-    region=region_publication.capitalize()
-    data = fetch_and_format('SELECT corps, departement, nombre FROM personnel_medical WHERE region = %s ORDER BY corps', (region,))
-    formatted_data = {}
-    for row in data:
-        corps = row['corps']
-        if corps not in formatted_data:
-            formatted_data[corps] = {}
-        formatted_data[corps][row['departement']] = row['nombre']
-    return jsonify(formatted_data)
-
-
-@app.route('/api/data/ppcs')
-def get_ppcs():
-    global region_publication
-    region=region_publication
-    query = """
-    SELECT Annee,Valeur
-    FROM indicateurs_dashbord_region
-    WHERE Region = %s AND Indicateur = 'Proportion de la population vivant à moins de 5 Km d’un centre de santé'
-    ORDER BY Annee
-    """
-    data = fetch_and_format(query, (region,))
-    return jsonify(data)
-
-@app.route('/api/data/nbre-lit-hbts')
-def get_nbre_lit_1000_hbts():
-    global region_publication
-    region=region_publication
-    query = """
-    SELECT Annee,Valeur
-    FROM indicateurs_dashbord_region
-    WHERE Region = %s AND Indicateur = 'Nombre de lits pour 1000 Habitants'
-    ORDER BY Annee
-    """
-    data = fetch_and_format(query, (region,))
-    return jsonify(data)
-
-
-
-@app.route('/api/data/taux-alphabetisation')
-def get_taux_alphabetisation():
-    global region_publication
-    region=region_publication.capitalize()
-    data = fetch_and_format("SELECT year, taux FROM taux_alphabetisation WHERE region = %s ORDER BY year", (region,))
-    return jsonify(data)
-
-@app.route('/api/data/taux-brute-scolarite')
-def get_taux_brute_scolarite():
-    global region_publication
-    region=region_publication.capitalize()
-    data = fetch_and_format("SELECT year, taux FROM taux_brute_scolarite WHERE region = %s ORDER BY year", (region,))
-    return jsonify(data)
-
-@app.route('/api/data/taux-electrification')
-def get_taux_electrification():
-    global region_publication
-    region=region_publication.capitalize()
-    data = fetch_and_format("SELECT year, nombre FROM taux_electrification WHERE region = %s ORDER BY year", (region,))
-    return jsonify(data)
-
-
-
-#_____________________________________________________________________Fin deuxieme
-
-
-
 
 
 publications_data = conf_pub.load_publications_from_db()
@@ -411,7 +393,7 @@ def search_indicatorsR():
     return render_template('search_indicateurR.html',indicateurs=indicateurs)
 
 
-from flask import jsonify, request
+
 
 @app.route('/autocomplete', methods=['GET'])
 def autocomplete():
@@ -427,11 +409,6 @@ def autocomplete():
     return jsonify(suggestions)
 
 
-
-
-
-
-# ... (le reste de votre code)
 
 @app.route('/filter_indicator/<path:indicateur>')
 def page_filtration_data(indicateur):
@@ -520,6 +497,11 @@ def page_filtration_data(indicateur):
         indicateur2=indicateur_SELECT
     )
 # Accès spécefique à une région
+
+#/filter_indicator/<path:indicateur>
+
+
+#__________________________
 @app.route('/search_indicatorsR/<path:indicateur>') 
 def request_indicateurR(indicateur):
     # Charger les données depuis MySQL
@@ -579,7 +561,6 @@ def request_indicateurR(indicateur):
         df_filtered=df_filtered_json  # Data JSON pour le filtrage
     )
 
-#----------------Autocomplétion
 
 
 
@@ -696,4 +677,4 @@ def get_data2():
 #-------------------------------------------------FIN API
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, port=5000)

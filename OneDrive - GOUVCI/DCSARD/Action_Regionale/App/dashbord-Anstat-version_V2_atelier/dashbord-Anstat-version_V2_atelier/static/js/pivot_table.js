@@ -459,20 +459,69 @@ function downloadFullData(format) {
         const filters = getActiveFilters();
         const filteredDataForDownload = fullData.filter(row => doesRowMatchFilters(row, filters));
 
-        const columnsForDownload = data.columns.map(col => col.join(' '));
-        const finalData = [columnsForDownload, ...filteredDataForDownload.map(row => columnsForDownload.map(col => row[col]))];
-
         if (format === 'xlsx') {
             const wb = XLSX.utils.book_new();
+
+            // Générer une matrice d'en-tête à plusieurs niveaux
+            const columns = data.columns;
+            const headerMatrix = [];
+            const levels = columns.length > 0 && Array.isArray(columns[0]) ? columns[0].length : 0;
+
+            for (let level = 0; level < levels; level++) {
+                const headerRow = [];
+                columns.forEach(col => {
+                    headerRow.push(col[level] || '');
+                });
+                headerMatrix.push(headerRow);
+            }
+
+            // Préparer les lignes de données
+            const columnsKeys = columns.map(col => col.join(' '));
+            const dataRows = filteredDataForDownload.map(row => columnsKeys.map(col => row[col]));
+            
+            // Combiner les en-têtes et les données
+            const finalData = headerMatrix.concat(dataRows);
             const ws = XLSX.utils.aoa_to_sheet(finalData);
+
+            // Appliquer la fusion des cellules pour les en-têtes
+            const merges = [];
+            for (let level = 0; level < levels; level++) {
+                let startCol = 0;
+                let colCount = 1;
+                for (let i = 1; i <= columns.length; i++) {
+                    const value = i < columns.length ? columns[i][level] : null;
+                    if (value === columns[startCol][level]) {
+                        colCount++;
+                    } else {
+                        if (colCount > 1) {
+                            merges.push({
+                                s: { r: level, c: startCol },
+                                e: { r: level, c: startCol + colCount - 1 }
+                            });
+                        }
+                        startCol = i;
+                        colCount = 1;
+                    }
+                }
+            }
+            if (merges.length > 0) {
+                ws['!merges'] = merges;
+            }
+            
             XLSX.utils.book_append_sheet(wb, ws, 'Données');
             XLSX.writeFile(wb, `Données_${indicateur_name}.xlsx`);
+
         } else if (format === 'csv') {
+            // Le format CSV ne gère pas les en-têtes à plusieurs niveaux.
+            // On utilise les en-têtes aplatis.
+            const columnsForDownload = data.columns.map(col => col.join(' '));
+            const finalData = [columnsForDownload, ...filteredDataForDownload.map(row => columnsForDownload.map(col => row[col]))];
+            
             let csvContent = finalData.map(e => e.join(",")).join("\n");
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
             link.setAttribute("href", URL.createObjectURL(blob));
-            link.setAttribute("download", `Données_${indicateur_name}.csv`);
+            link.setAttribute("download", `ANStat_${indicateur_name}.csv`);
             document.body.appendChild(link);
             link.click();
             link.remove();
