@@ -3,7 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 import os
 import pop_naissance
-import utils
+
 import logging
 import pandas as pd
 import urllib
@@ -17,10 +17,11 @@ import config as cf
 import models as ml
 from config import app, db 
 import io
+import description_region as dr
 current_dir = os.path.dirname(os.path.abspath(__file__))
 config_pub_path = os.path.join(current_dir, 'config_pub')
 sys.path.append(config_pub_path)
-import import_publications as conf_pub
+import publication as conf_pub
 from models import (  # Import models from the corrected models.py
     IndicateursDashbordNational,
     IndicateursDashbordRegion,
@@ -43,8 +44,6 @@ region_publication="PORO"# Cette variable va nous permettre
 
 # Configuration du logger pour le débogage
 logging.basicConfig(level=logging.DEBUG)
-
-
 
 
 #_________________________________________________________________Fin région, seulement les departement
@@ -315,12 +314,24 @@ def get_taux_electrification():
 @app.route('/region_vitrine/<region>')  
 def region_vitrine(region):  
     global region_publication
-    region_publication=region
-    print('************:',region_publication)
+    region_publication = region
+    
+    # Charger le DataFrame
+    df = dr.description_region("static/data/description_region.xlsx")
+    
+    # Filtrer par région
+    descr_region = df[df['Nom'] == region_publication]
+    
+    # Si la région existe, récupérer la description
+    if not descr_region.empty:
+        description_text = descr_region.iloc[0]['Description']  # Récupère la première ligne
+    else:
+        description_text = "Description non disponible."
+    
     return render_template('region_vitrine.html',  
-                         
-                           region_name=region_publication,  
-                          ) 
+                           region_name=region_publication,
+                           description=description_text)
+
 
 
 publications_data = conf_pub.load_publications_from_db()

@@ -205,18 +205,15 @@ class TauxAlphabetisation(db.Model):
     def __repr__(self):
         return f"<TauxAlphabetisation(region={self.region}, year={self.year}, taux={self.taux})>"
 
-# Modèle pour la table 'taux_brute_scolarite'
 class TauxBruteScolarite(db.Model):
     __tablename__ = 'taux_brute_scolarite'
 
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    region = db.Column(db.String(255), nullable=True)
-    year = db.Column(db.Integer, nullable=True)
+    region = db.Column(db.String(255), primary_key=True)
+    year = db.Column(db.Integer, primary_key=True)
     taux = db.Column(db.DECIMAL(5, 2), nullable=True)
 
     def __repr__(self):
         return f"<TauxBruteScolarite(region={self.region}, year={self.year}, taux={self.taux})>"
-
 # Modèle pour la table 'taux_chomage'
 class TauxChomage(db.Model):
     __tablename__ = 'taux_chomage'
