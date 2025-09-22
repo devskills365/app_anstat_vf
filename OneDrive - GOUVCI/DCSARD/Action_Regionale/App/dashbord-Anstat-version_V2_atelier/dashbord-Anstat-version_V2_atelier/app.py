@@ -493,7 +493,7 @@ def page_filtration_data(indicateur):
     
     # Préparer les colonnes pour l'affichage dans le template
     existing_columns = df_filtered.columns.tolist()
-    columns_to_exclude = ['Valeur', 'Indicateurs', 'cle_pivot_table', 'Dimension', 'Modalites']
+    columns_to_exclude = ['Valeur', 'Indicateurs', 'cle_pivot_table', 'Dimension', 'Modalites','id']
     desaggregation_columns = [col for col in existing_columns if col not in columns_to_exclude]
     
     print('Les colonnes dans le dataframe final:', df_filtered.columns)
@@ -596,31 +596,14 @@ def process_columns():
 
     # Étape 2 : Appliquer les mêmes transformations que dans request_indicateur2
     df_filtered = df.copy() 
-    df_final_rows = []
     
-    for _, row in df_filtered.iterrows():
-        if pd.notna(row.get('Dimension')) and pd.notna(row.get('Modalites')):
-            dimension_cols = [col.strip() for col in row['Dimension'].split('/')]
-            category_values = [value.strip() for value in row['Modalites'].split('/')]
-            
-            dimension_dict = dict(zip(dimension_cols, category_values))
-            
-            temp_row_dict = {
-                'Indicateurs': row.get('Indicateurs'),
-                'Valeur': row.get('Valeur'),
-                'Annee': row.get('Annee')
-            }
-            temp_row_dict.update(dimension_dict)
-
-            cle_pivot_table_parts = dimension_cols + ['Annee']
-            temp_row_dict['cle_pivot_table'] = ",".join(cle_pivot_table_parts)
-            
-            df_final_rows.append(temp_row_dict)
     
-    df_final = pd.DataFrame(df_final_rows)
-    
+    df_final = pd.DataFrame(df_filtered)
+ 
+    print('data issue V2 , prête analysée',df_final.shape)
     df_filtered = df_final.dropna(axis=1, how='all').copy()
-    print('data issue V2 , prête analysée',df_final.columns)
+ 
+    
     # Nettoyage et conversion des types comme précédemment
     if value_column in df_filtered.columns:
         df_filtered[value_column] = df_filtered[value_column].astype(str).str.replace(' ', '').str.replace(',', '.')
@@ -637,9 +620,9 @@ def process_columns():
 
         data = df_filtered[df_filtered['cle_pivot_table'].apply(lambda x: set(x.split(',')) == my_index_set)].copy()
         
-        print('Les colonnes des données extraire:',data.columns)
+        print('Les colonnes des données extraire:',data.head())
+        #print('Afficher',data.head())
         
-        print('Afficher',data.head())
         pivot_table = pd.pivot_table(
             data,
             index=row_columns,

@@ -6,7 +6,7 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 
-from models import db, Region, IndicateurV2, V1Indicateur, Indicateur, DirectionStatistique  # Importer les modèles
+from models import db, Region, IndicateurV2, V1Indicateur, Indicateur, DataRequete  # Importer les modèles
 
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
@@ -170,29 +170,35 @@ def obtention_data_mysql_niveauDesagr(indicateur_name, offset=0, limit=25):
     except Exception as e:
         print(f"Erreur lors de la récupération des données MySQL pour l'indicateur '{indicateur_name}' : {str(e)}")
         return pd.DataFrame()
-def obtention_data_mysql_requete(indicateur_name, offset=0, limit=1000):
+
+
+
+def obtention_data_mysql_requete(indicateur_name, offset=0, limit=10000):
     try:
         with session_scope() as session:
-            # Requête pour récupérer toutes les colonnes
-            query = session.query(
-                V1Indicateur.Dimension,
-                V1Indicateur.Modalites,
-                V1Indicateur.Indicateurs,
-                V1Indicateur.Annee,
-                V1Indicateur.Valeur
-            ).filter(V1Indicateur.Indicateurs == indicateur_name)
+            # Requête SQLAlchemy : sélectionne toutes les colonnes de DataRequete
+            query = (
+                session.query(DataRequete)
+                .filter(DataRequete.Indcateurs == indicateur_name)
+                .offset(offset)
+                .limit(limit)
+            )
 
             # Conversion en DataFrame
-            df = pd.read_sql(query.statement, session.bind) # session.bind est nécessaire pour lire la requête
+            df = pd.read_sql(query.statement, session.bind)
 
             if df.empty:
                 print(f"Aucune donnée trouvée pour l'indicateur '{indicateur_name}'")
                 return pd.DataFrame()
 
             return df
+
     except Exception as e:
-        print(f"Erreur lors de la récupération des données MySQL pour l'indicateur '{indicateur_name}' : {str(e)}")
+        print(
+            f"Erreur lors de la récupération des données MySQL pour l'indicateur '{indicateur_name}' : {str(e)}"
+        )
         return pd.DataFrame()
+
     
 
 def autocompletion():
@@ -206,7 +212,6 @@ def autocompletion():
     except Exception as e:
         print(f"Erreur lors de la récupération des données MySQL : {e}")
         return pd.DataFrame()
-
 
 
 
