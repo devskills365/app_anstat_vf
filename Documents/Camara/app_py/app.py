@@ -4,6 +4,8 @@ import pop_naissance
 import logging
 import pandas as pd
 import urllib
+from sqlalchemy import func
+
 from datetime import datetime
 import sys
 from itertools import chain
