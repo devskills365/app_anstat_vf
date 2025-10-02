@@ -115,14 +115,12 @@
      class="w-full h-auto max-h-[400px] object-cover rounded-lg shadow-md hover:scale-105 transition-transform">
 
                 </div>
-               <div class="flex-1">
-                    <h2 class="text-base italic text-[#49655A] font-semibold mb-2">Description de la région</h2>
-                    <p class="text-sm text-gray-700 text-justify" id="description">
-         {{ description[:1000] }}{% if description|length > 1000 %}...{% endif %}
+              <div class="flex-1">
+    <h2 class="text-base italic text-[#49655A] font-semibold mb-2">Description de la région</h2>
+    <p class="text-sm text-gray-700 text-justify" id="description">
+        {{ description[:2000]|safe }}
     </p>
-     {% if description|length > 1000 %}
-    <button id="readMoreBtn" class="text-blue-600 hover:underline mt-2">Lire la suite</button>
-    {% endif %}
+  
 </div>
 
             </div>
@@ -279,15 +277,16 @@
             return false;
         }
     </script>
-    <script>
+    <!-- Pour la description des régions--> 
+<script>
 document.addEventListener('DOMContentLoaded', function () {
     const btn = document.getElementById('readMoreBtn');
     const desc = document.getElementById('description');
 
     if(btn){
         btn.addEventListener('click', function(){
-            desc.textContent = `{{ description|tojson }}`; // Remplace par tout le texte
-            btn.style.display = 'none'; // Cache le bouton
+            desc.innerHTML = `{{ description|safe }}`; 
+            btn.style.display = 'none';
         });
     }
 });

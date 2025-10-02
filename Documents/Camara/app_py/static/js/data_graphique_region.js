@@ -149,23 +149,22 @@ document.addEventListener("DOMContentLoaded", function () {
             });
         });
 
-// Proportion de la Population à moins 5 km Centre de santé (ppcs)
-// Proportion de la Population à moins 5 km Centre de santé (ppcs)
+//'Proportion de la population vivant à moins de 5 Km d’un centre de santé'
 fetch('/api/data/ppcs')
     .then(response => response.json())
-    .then(dataIDH => {
+    .then(dataPPC => {
         // Vérifier les données dans la console pour débogage
-        console.log('Données reçues :', dataIDH);
+        console.log('Données reçues :', dataPPC);
 
-        var ctxIDH = document.getElementById("ppcsChart").getContext("2d");
-        new Chart(ctxIDH, {
+        var ctxPPC = document.getElementById("ppcsChart").getContext("2d");
+        new Chart(ctxPPC, {
             type: "line",
             data: {
-                labels: dataIDH.map(d => Number(d.Annee)), // Convertir les années en nombres
+                labels: dataPPC.map(d => Number(d.Annee)), // Convertir les années en nombres
                 datasets: [
                     {
                         label: "Proportion(%)",
-                        data: dataIDH.map(d => Number(d.Valeur)), // Convertir les valeurs en nombres
+                        data: dataPPC.map(d => Number(d.Valeur)), // Convertir les valeurs en nombres
                         borderColor: "green",
                         fill: false,
                         pointBackgroundColor: "green",
@@ -343,7 +342,7 @@ fetch('/api/data/nbre-lit-hbts')
             });
         });
         
-    // Taux Brut de Scolarité
+    // c'est plutot :Ratio élève/salle de classe au primaire
     fetch('/api/data/taux-brute-scolarite')
         .then(response => response.json())
         .then(tauxBruteData => {
@@ -351,10 +350,10 @@ fetch('/api/data/nbre-lit-hbts')
             new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: tauxBruteData.map(d => d.year),
+                    labels: tauxBruteData.map(d => d.Annee),
                     datasets: [{
                         label: 'Taux (%)',
-                        data: tauxBruteData.map(d => d.taux),
+                        data: tauxBruteData.map(d => d.Valeur),
                         backgroundColor: '#e09705',
                         borderColor: '#e09705',
                         borderWidth: 2
@@ -369,18 +368,18 @@ fetch('/api/data/nbre-lit-hbts')
             });
         });
 
-    // Taux d'Électrification
-    fetch('/api/data/taux-electrification')
+    //Taux de couverture réseaux
+    fetch('/api/data/taux-couverture-telephone')
         .then(response => response.json())
         .then(tauxElectData => {
             var ctx = document.getElementById('tauxElectChart').getContext('2d');
             new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: tauxElectData.map(d => d.year),
+                    labels: tauxElectData.map(d => d.Annee),
                     datasets: [{
                         label: 'Nombre',
-                        data: tauxElectData.map(d => d.nombre),
+                        data: tauxElectData.map(d => d.Valeur),
                         backgroundColor: '#006B45',
                         borderColor: '#006B45',
                         borderWidth: 1

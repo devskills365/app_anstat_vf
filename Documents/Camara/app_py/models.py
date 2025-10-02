@@ -115,10 +115,8 @@ class IndicateursDashbordNational(db.Model):
 class IndicateursDashbordRegion(db.Model):
     __tablename__ = 'indicateurs_dashbord_region'
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    Domaine = db.Column(db.String(255), nullable=False)
     Indicateur = db.Column(db.String(255), nullable=False)
     Annee = db.Column(db.Integer, nullable=False)
-    Source = db.Column(db.String(255), nullable=True)
     Region = db.Column(db.String(255), nullable=False)
     Valeur = db.Column(db.DECIMAL(10, 2), nullable=False)
 
