@@ -72,7 +72,6 @@ function handleDrop(event, type) {
     togglePlaceholders();
     sendColumnsToServer();
 }
-
 function addColumnToArea(column, area, columnList, type) {
     const newItem = document.createElement('div');
     newItem.classList.add('draggable-item');
@@ -84,10 +83,15 @@ function addColumnToArea(column, area, columnList, type) {
 
     if (type !== 'initial') {
         newItem.addEventListener('click', function () {
+            // 1. SUPPRIMER l'élément de la zone actuelle
             area.removeChild(newItem);
+
+            // 2. Supprimer de la liste (rowColumns ou colColumns)
             if (columnList) {
                 columnList.splice(columnList.indexOf(column), 1);
             }
+   
+            addColumnToArea(column, initialList, null, 'initial');
             togglePlaceholders();
             sendColumnsToServer();
         });
@@ -132,25 +136,41 @@ function loadData(offset, limit, isInitialLoad = false) {
     })
     .then(response => {
         if (!response.ok) throw new Error('Erreur réseau: ' + response.status);
-        return response.json();
+        // Au lieu de retourner response.json(), on retourne le texte
+        return response.text(); 
     })
-    .then(data => {
+    .then(text => { // 'text' contient la réponse brute du serveur
+        // 🚨 Correction pour gérer les NaN non valides en JSON
+        const cleanedText = text.replace(/NaN/g, 'null'); 
+        
+        let data;
+        try {
+            data = JSON.parse(cleanedText);
+        } catch (e) {
+            console.error('Erreur de Parsing JSON après nettoyage:', e);
+            console.error('Texte brut responsable:', text);
+            isLoading = false;
+            return;
+        }
+        
         if (data.error) {
             console.error('Server error:', data.error);
             isLoading = false;
             return;
         }
         
+        // ... (Le reste de votre logique reste inchangé) ...
+        
         if (data.data.length < limit) {
-            hasMoreData = false;
+             hasMoreData = false;
         }
         
         const newRows = data.data.map(row => {
-            const rowData = {};
-            data.columns.forEach((col, index) => {
-                rowData[col.join(' ')] = row[index];
-            });
-            return rowData;
+             const rowData = {};
+             data.columns.forEach((col, index) => {
+                 rowData[col.join(' ')] = row[index];
+             });
+             return rowData;
         });
 
         tableData = tableData.concat(newRows);
@@ -160,21 +180,21 @@ function loadData(offset, limit, isInitialLoad = false) {
             applyFilters();
             generateFilters();
         } else {
-            // Chargements suivants : ajouter de nouvelles lignes
-            const newFilteredRows = newRows.filter(row => doesRowMatchFilters(row, getActiveFilters()));
-            appendRows({
-                columns: data.columns,
-                data: newFilteredRows.map(row => {
+             // Chargements suivants : ajouter de nouvelles lignes
+             const newFilteredRows = newRows.filter(row => doesRowMatchFilters(row, getActiveFilters()));
+             appendRows({
+                 columns: data.columns,
+                 data: newFilteredRows.map(row => {
                      return data.columns.map(col => row[col.join(' ')]);
-                })
-            });
+                 })
+             });
         }
 
         isLoading = false;
     })
     .catch(error => {
-        console.error('Erreur:', error);
-        isLoading = false;
+         console.error('Erreur:', error);
+         isLoading = false;
     });
 }
 

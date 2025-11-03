@@ -1,4 +1,4 @@
-from flask import  render_template, request, session, jsonify,abort
+from flask import render_template, request, session, jsonify, abort
 import os
 import pop_naissance
 import logging
@@ -17,7 +17,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 config_pub_path = os.path.join(current_dir, 'config_pub')
 sys.path.append(config_pub_path)
 import publication as conf_pub
-from models import (  # Import models from the corrected models.py
+from models import (
     IndicateursDashbordNational,
     IndicateursDashbordRegion,
     RatiosEleveEnseignant,
@@ -27,8 +27,8 @@ from models import (  # Import models from the corrected models.py
     TauxAlphabetisation,
     TauxBruteScolarite,
     TauxElectrification,
-     DescriptionRegion,
-     SearchIndicateur
+    DescriptionRegion,
+    SearchIndicateur
 )
 
 global region_publication
@@ -55,7 +55,7 @@ def population_data():
     result = pop_naissance.naissance_deces_pop()
     now = datetime.now()
 
-    if isinstance(result, dict) and "error" in result:  # Gestion d'erreur
+    if isinstance(result, dict) and "error" in result:
         return jsonify(result)
 
     naissances, deces, population = result
@@ -67,22 +67,18 @@ def population_data():
     }
     return jsonify(data)
 
-
-
- # Page principale (home page) 
 @app.route('/')
 def list_regions():
-    regions =  qr.options_regions() # or qr.options_regions()
+    regions = qr.options_regions() # or qr.options_regions()
     naissance, deces, pop_minute = pop_naissance.naissance_deces_pop()
     
     # We no longer pass graph data to the template. It's fetched via API.
     return render_template('home.html',
-                           naissance=naissance,
-                           deces=deces,
-                           pop_minute=pop_minute,
-                           regions=regions)
+                            naissance=naissance,
+                            deces=deces,
+                            pop_minute=pop_minute,
+                            regions=regions)
 
-#------------------pour la page home , les indicateurs clés
 ## Indicateurs nationaux________________________________________Nationaux
 
 @app.route('/api/data/ihpc')
@@ -118,7 +114,6 @@ def get_ipc():
     # Correctly format the data for JSON output
     formatted_data = [{'Annee': row.Annee, 'Valeur': float(row.Valeur) if row.Valeur is not None else None} for row in data]
     return jsonify(formatted_data)
-
 
 
 @app.route('/api/data/sante-budget')
@@ -252,11 +247,8 @@ def get_taux_electrification():
     return jsonify(formatted_data)
 
 
-
-
-
-
 publications_data = conf_pub.load_publications_from_db()
+
 @app.route('/publications')
 def publications_region():
     try:
@@ -295,17 +287,11 @@ def publication_detail(title):
 
     publication_number = f"P{list(publications_data.keys()).index(pub_title) + 1:03d}"
     return render_template('publications_detail.html',
-                           publication_title=publication['title'],
-                           publication_description=publication['description'],
-                           publication_date=publication['date'],
-                           publication_number=publication_number,
-                           region_name=region_publication)
-
-
-
-
-
-
+                            publication_title=publication['title'],
+                            publication_description=publication['description'],
+                            publication_date=publication['date'],
+                            publication_number=publication_number,
+                            region_name=region_publication)
 
 
 """ 
@@ -326,8 +312,6 @@ def search_indicatorsR():
     return render_template('search_indicateurR.html',indicateurs=indicateurs)
 
 
-
-
 @app.route('/autocomplete', methods=['GET'])
 def autocomplete():
     query = request.args.get('query', '').strip().lower()
@@ -340,7 +324,6 @@ def autocomplete():
     # Filtrer les indicateurs qui contiennent le texte saisi
     suggestions = df[df['Indicateurs'].str.contains(query, na=False)]['Indicateurs'].unique().tolist()
     return jsonify(suggestions)
-
 
 
 @app.route('/filter_indicator/<path:indicateur>')
@@ -461,19 +444,19 @@ def request_indicateurR(indicateur):
     df_filtered = df_filtered.fillna('-')
     df_final = pd.DataFrame()
     for _, row in df_filtered.iterrows():
-            dimension_cols = row['Dimension'].split('/')
-            category_values = row['Modalites'].split('/')
-            dimension_cols = [col.strip() for col in dimension_cols]
-            category_values = [value.strip() for value in category_values]
-            dimension_dict = dict(zip(dimension_cols, category_values))
-            temp_row = pd.Series(dimension_dict)
-            temp_row['Indicateurs'] = row['Indicateurs']
-            temp_row["Valeur"] = row["Valeur"]
-            temp_row["Annee"] = row["Annee"]
-            cle_pivot_table = ",".join(dimension_cols) + ",Annee"
-            temp_row["cle_pivot_table"] = cle_pivot_table
-            # Ajouter cette ligne nettoyée au DataFrame final
-            df_final = pd.concat([df_final, temp_row.to_frame().T], ignore_index=True)
+        dimension_cols = row['Dimension'].split('/')
+        category_values = row['Modalites'].split('/')
+        dimension_cols = [col.strip() for col in dimension_cols]
+        category_values = [value.strip() for value in category_values]
+        dimension_dict = dict(zip(dimension_cols, category_values))
+        temp_row = pd.Series(dimension_dict)
+        temp_row['Indicateurs'] = row['Indicateurs']
+        temp_row["Valeur"] = row["Valeur"]
+        temp_row["Annee"] = row["Annee"]
+        cle_pivot_table = ",".join(dimension_cols) + ",Annee"
+        temp_row["cle_pivot_table"] = cle_pivot_table
+        # Ajouter cette ligne nettoyée au DataFrame final
+        df_final = pd.concat([df_final, temp_row.to_frame().T], ignore_index=True)
             
     df_filtered = df_final.dropna(axis=1, how='all')
     if df_filtered.empty:
@@ -493,9 +476,6 @@ def request_indicateurR(indicateur):
         indicateur2=indicateur_SELECT,  # Indicateur sélectionné
         df_filtered=df_filtered_json  # Data JSON pour le filtrage
     )
-
-
-
 
     
 @app.route('/process_columns', methods=['POST'])
@@ -521,10 +501,10 @@ def process_columns():
     
     
     df_final = pd.DataFrame(df_filtered)
- 
+    
     print('data issue V2 , prête analysée',df_final.shape)
     df_filtered = df_final.dropna(axis=1, how='all').copy()
- 
+    
     
     # Nettoyage et conversion des types comme précédemment
     if value_column in df_filtered.columns:
@@ -555,6 +535,7 @@ def process_columns():
         
         pivot_table.reset_index(inplace=True)
         
+        
         processed_columns = []
         for col in pivot_table.columns:
             if isinstance(col, tuple):
@@ -571,8 +552,6 @@ def process_columns():
         return jsonify({"error": f"Erreur lors de la création du tableau croisé dynamique : {e}"}), 400
 
     return jsonify(result_data)
-
-
 
 
 #Pour la liste des indicateur dans template domaine-sous-domaine-indicateur, pour la domaine indicateur
@@ -601,8 +580,6 @@ def get_data2():
     except Exception as e:
         print(f"Erreur lors de la récupération des données : {e}")
         return jsonify({})
-
-
 
 
 #-------------------------------------------------FIN API
