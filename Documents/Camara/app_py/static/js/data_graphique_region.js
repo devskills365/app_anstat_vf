@@ -342,31 +342,79 @@ fetch('/api/data/nbre-lit-hbts')
             });
         });
         
-    // c'est plutot :Ratio élève/salle de classe au primaire
-    fetch('/api/data/taux-brute-scolarite')
-        .then(response => response.json())
-        .then(tauxBruteData => {
-            var ctx = document.getElementById('tauxBruteChart').getContext('2d');
-            new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: tauxBruteData.map(d => d.Annee),
-                    datasets: [{
-                        label: 'Taux (%)',
-                        data: tauxBruteData.map(d => d.Valeur),
-                        backgroundColor: '#e09705',
-                        borderColor: '#e09705',
-                        borderWidth: 2
-                    }]
+    // Ratio élève/salle de classe au primaire
+fetch('/api/data/taux-brute-scolarite')
+    .then(response => response.json())
+    .then(tauxBruteData => {
+        const ctx = document.getElementById('tauxBruteChart');
+        if (!ctx) return; // sécurité si le canvas n'existe pas
+
+        new Chart(ctx.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: tauxBruteData.map(d => d.Annee),
+                datasets: [{
+                    label: 'Taux (%)',
+                    data: tauxBruteData.map(d => d.Valeur),
+                    backgroundColor: '#e09705',
+                    borderColor: '#e09705',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.3
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        title: {
+                            display: true,
+                            text: "Proportion (%)",
+                            color: '#333',
+                            font: { size: 13 }
+                        },
+                        grid: {
+                            color: 'rgba(0,0,0,0.1)',   // couleur des lignes
+                            lineWidth: 0.8,             // épaisseur fine
+                            borderDash: [4, 4]          // tirets (longueur du trait, longueur du vide)
+                        },
+                        ticks: {
+                            color: '#555'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: "Année",
+                            color: '#333',
+                            font: { size: 13 }
+                        },
+                        grid: {
+                            color: 'rgba(0,0,0,0.05)',
+                            lineWidth: 0.6,
+                            borderDash: [4, 4]
+                        },
+                        ticks: {
+                            color: '#555'
+                        }
+                    }
                 },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: { position: 'top' }
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: { color: '#333' }
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false
                     }
                 }
-            });
+            }
         });
+    })
+    .catch(err => console.error("Erreur lors du chargement du taux brute:", err));
 
     //Taux de couverture réseaux
     fetch('/api/data/taux-couverture-telephone')
