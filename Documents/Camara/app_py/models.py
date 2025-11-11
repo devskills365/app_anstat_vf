@@ -390,3 +390,9 @@ class DataRequete(db.Model):
     sexe = db.Column(db.Text, name="Sexe", nullable=True)
     mairies = db.Column(db.Text, name="Mairies", nullable=True)
     national = db.Column(db.Text, name="National", nullable=True)
+
+class NiveauParIndicateurs(db.Model):
+    __tablename__ = 'data_requete_desagregation_unique'
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    Indicateurs = db.Column(db.String(255), nullable=True)
+    cle_pivot_unique = db.Column(db.String(255), nullable=True)

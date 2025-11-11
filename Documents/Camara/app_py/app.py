@@ -38,7 +38,8 @@ region_publication="PORO"# Cette variable va nous permettre
 #https://colab.research.google.com/drive/1JUqEvhPJQErgB1DPo87JzXu1FlpqTZm8
 # Pour inserer les données dans json
 #https://colab.research.google.com/drive/1W-OEye7rhuI4s_hJUOESPJfeJIKbPY-h
-
+# Suite de traitement:
+#https://colab.research.google.com/drive/1jVuPWAfmAMnlyLG8JKBt9QiBCKjlCW5k#scrollTo=jj3q_Xy7w_K5
 # Configuration du logger pour le débogage
 logging.basicConfig(level=logging.DEBUG)
 
@@ -349,27 +350,7 @@ def page_filtration_data(indicateur):
     else:
         return render_template('no_data.html')
     
-    # Créer dynamiquement les colonnes de désagrégation
-    for index, row in df_filtered.iterrows():
-        try:
-            dimension_cols = [col.strip() for col in row['Dimension'].split('/')]
-            category_values = [value.strip() for value in row['Modalites'].split('/')]
-            
-            dimension_dict = dict(zip(dimension_cols, category_values))
-            
-            for key, value in dimension_dict.items():
-                if key not in df_filtered.columns:
-                    df_filtered[key] = None
-                df_filtered.at[index, key] = value
-        except Exception as e:
-            # Gérer les erreurs de format de données
-            print(f"Erreur de traitement des données à la ligne {index}: {e}")
-            
-    # Créer la colonne 'cle_pivot_table'
-    existing_cols_for_pivot = [col for col in df_filtered.columns if col not in ['Indicateurs', 'Valeur', 'Annee', 'Dimension', 'Modalites']]
-    df_filtered['cle_pivot_table'] = df_filtered[existing_cols_for_pivot].apply(
-        lambda x: ','.join(x.dropna().astype(str)), axis=1
-    )
+    
     
     # Convertir les colonnes en types numériques
     if 'Annee' in df_filtered.columns:
@@ -396,10 +377,8 @@ def page_filtration_data(indicateur):
             'mode_calcul': mode_calcul
         })
     
-    # Préparer les colonnes pour l'affichage dans le template
-    existing_columns = df_filtered.columns.tolist()
-    columns_to_exclude = ['Valeur', 'Indicateurs', 'cle_pivot_table', 'Dimension', 'Modalites','id']
-    desaggregation_columns = [col for col in existing_columns if col not in columns_to_exclude]
+
+    desaggregation_columns = qr.obtention_data_mysql_niveauDesagr(indicateur_SELECT)
     
     print('Les colonnes dans le dataframe final:', df_filtered.columns)
     print('Notre indicateur:', indicateur_SELECT)
@@ -412,9 +391,7 @@ def page_filtration_data(indicateur):
         colonne_valable=desaggregation_columns,
         indicateur2=indicateur_SELECT
     )
-# Accès spécefique à une région
 
-#/filter_indicator/<path:indicateur>
 
 
 #__________________________

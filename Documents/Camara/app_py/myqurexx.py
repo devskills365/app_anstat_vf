@@ -17,6 +17,7 @@ from models import (
     Indicateur,
     IndicateurV2,
     Region,
+    V1Indicateur,
     NiveauParIndicateurs
 )
 
@@ -148,44 +149,15 @@ def session_scope():
 
 
 # =========================================================
-# 📊 Récupération de données MySQL (niveau désagrégé)
-# =========================================================
-def obtention_data_mysql_niveauDesagr(indicateur_name):
-    """
-    Récupère la liste des colonnes de désagrégation pour un indicateur.
-    Retourne une liste de chaînes, ex: ["Mois", "Region", ...].
-    """
-    try:
-        with session_scope() as session:
-            # Récupérer la valeur de cle_pivot_unique pour l'indicateur
-            result = session.query(NiveauParIndicateurs.cle_pivot_unique).filter(
-                NiveauParIndicateurs.Indicateurs == indicateur_name
-            ).first()
-
-            if not result or not result[0]:
-                print(f"Aucune colonne de désagrégation trouvée pour '{indicateur_name}'")
-                return []
-
-            # Séparer la chaîne par virgule et nettoyer les espaces
-            desaggregation_columns = [col.strip() for col in result[0].split(',')]
-            return desaggregation_columns
-
-    except Exception as e:
-        print(f"Erreur lors de la récupération des colonnes de désagrégation pour '{indicateur_name}': {e}")
-        return []
-
-
-# =========================================================
 # 📈 Récupération de données MySQL (DataRequete)
 # =========================================================
-def obtention_data_mysql_requete(indicateur_name, offset=0, limit=500):
+def obtention_data_mysql_requete(indicateur_name):
     try:
         with session_scope() as session:
             query = (
-                session.query(DataRequete)
-                .filter(DataRequete.Indcateurs == indicateur_name)
-                .offset(offset)
-                .limit(limit)
+                session.query(NiveauParIndicateurs.cle_pivot_unique)
+                .filter(NiveauParIndicateurs.Indcateurs == indicateur_name)
+                
             )
 
             df = pd.read_sql(query.statement, session.bind)
