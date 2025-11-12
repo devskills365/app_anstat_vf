@@ -327,25 +327,13 @@ def autocomplete():
     return jsonify(suggestions)
 
 
+#Pour obtenir 
 @app.route('/filter_indicator/<path:indicateur>')
 def page_filtration_data(indicateur):
 
     indicateur_SELECT = urllib.parse.unquote(indicateur)
-
     definitions = None
     mode_calcul = None
-
-
-    
-
-
-    
-    
-    
-
-    
-
-
     desaggregation_columns = qr.obtention_data_mysql_niveauDesagr(indicateur_SELECT)
 
     print('Notre indicateur:', indicateur_SELECT)

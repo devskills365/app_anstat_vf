@@ -45,111 +45,130 @@ function handleDragStart(event) {
     event.dataTransfer.setData('source-id', event.target.id);
 }
 
-// Fonction MODIFIÉE pour gérer l'interdiction de dépôt
 function handleDragOver(event) {
-    event.preventDefault();
+    event.preventDefault();
 
-    // Récupère la colonne que l'utilisateur essaie de glisser
-    const columnToDrop = event.dataTransfer.getData('text/plain');
-    if (!columnToDrop) return;
+    // Récupère la colonne que l'utilisateur essaie de glisser
+    const columnToDrop = event.dataTransfer.getData('text/plain');
+    if (!columnToDrop) return;
 
-    // Concatène toutes les colonnes actuellement sélectionnées dans les zones de lignes et de colonnes
-    const currentlySelectedColumns = [...rowColumns, ...colColumns];
+    // Concatène toutes les colonnes actuellement sélectionnées dans les zones de lignes et de colonnes
+    const currentlySelectedColumns = [...rowColumns, ...colColumns];
 
-    let dropAllowed = true;
+    let dropAllowed = true;
 
-    // Vérifie si la colonne en cours de dépôt est exclue par une colonne déjà présente
-    for (const selectedCol of currentlySelectedColumns) {
-        const excludedCols = COLUMN_DEPENDENCIES[selectedCol];
-        if (excludedCols && excludedCols.includes(columnToDrop)) {
-            dropAllowed = false;
-            break;
-        }
-    }
-    
-    // Si le dépôt n'est pas autorisé, modifie l'apparence et empêche le dépôt
-    if (!dropAllowed) {
-        event.dataTransfer.dropEffect = 'none';
-        
-        // Optionnel: ajouter un retour visuel (exemple: fond rouge)
-        event.currentTarget.classList.add('not-allowed-drop');
-        setTimeout(() => event.currentTarget.classList.remove('not-allowed-drop'), 500);
+    // Vérifie si la colonne en cours de dépôt est exclue par une colonne déjà présente
+    for (const selectedCol of currentlySelectedColumns) {
+        const excludedCols = COLUMN_DEPENDENCIES[selectedCol];
+        if (excludedCols && excludedCols.includes(columnToDrop)) {
+            dropAllowed = false;
+            break;
+        }
+    }
+    
+    // Si le dépôt n'est pas autorisé, modifie l'apparence et empêche le dépôt
+    if (!dropAllowed) {
+        event.dataTransfer.dropEffect = 'none';
+        
+        // Optionnel: ajouter un retour visuel (exemple: fond rouge)
+        event.currentTarget.classList.add('not-allowed-drop');
+        setTimeout(() => event.currentTarget.classList.remove('not-allowed-drop'), 500);
 
-    } else {
-        event.dataTransfer.dropEffect = 'move';
-    }
+    } else {
+        event.dataTransfer.dropEffect = 'move';
+    }
 }
-
 function handleDrop(event, type) {
-    event.preventDefault();
-    const column = event.dataTransfer.getData('text/plain');
-    const sourceId = event.dataTransfer.getData('source-id');
-    const draggedElement = document.querySelector(`[data-column="${column}"][id="${sourceId}"]`) || document.querySelector(`[data-column="${column}"]`);
+    event.preventDefault();
+    const column = event.dataTransfer.getData('text/plain');
+    const sourceId = event.dataTransfer.getData('source-id');
+    const draggedElement = document.querySelector(`[data-column="${column}"][id="${sourceId}"]`) || document.querySelector(`[data-column="${column}"]`);
 
-    if (!draggedElement) return;
+    if (!draggedElement) return;
 
-    // Vérification de la dépendance (répétée pour être sûr, même si handleDragOver a déjà empêché)
-    if (type !== 'initial') {
-        const currentlySelectedColumns = [...rowColumns, ...colColumns];
-        for (const selectedCol of currentlySelectedColumns) {
-            const excludedCols = COLUMN_DEPENDENCIES[selectedCol];
-            if (excludedCols && excludedCols.includes(column)) {
-              
-                
-                return;
-            }
+    // Vérification de la dépendance (mieux de le faire dans handleDragOver, mais on le garde ici)
+    if (type !== 'initial') {
+        const currentlySelectedColumns = [...rowColumns, ...colColumns];
+        for (const selectedCol of currentlySelectedColumns) {
+            const excludedCols = COLUMN_DEPENDENCIES[selectedCol];
+            if (excludedCols && excludedCols.includes(column)) {
+                return;
+            }
+        }
+    }
+
+    if (draggedElement.parentElement) {
+        draggedElement.parentElement.removeChild(draggedElement);
+    }
+    
+    // Flag pour savoir si la colonne était un filtre (i.e. dans rowColumns)
+    const wasRowColumn = rowColumns.includes(column);
+
+    // Retrait de la liste interne (rowColumns ou colColumns)
+    if (wasRowColumn) {
+        rowColumns.splice(rowColumns.indexOf(column), 1);
+    } else if (colColumns.includes(column)) {
+        colColumns.splice(colColumns.indexOf(column), 1);
+    }
+
+    if (type === 'row' && !rowColumns.includes(column)) {
+        rowColumns.push(column);
+        addColumnToArea(column, droppableAreaRows, rowColumns, type);
+    } else if (type === 'col' && !colColumns.includes(column)) {
+        colColumns.push(column);
+        addColumnToArea(column, droppableAreaCols, colColumns, type);
+    } else if (type === 'initial') {
+        addColumnToArea(column, initialList, null, type);
+        
+        // CORRECTION CLÉ : Si l'élément était une colonne de ligne (potentiel filtre)
+        // et qu'il est renvoyé à la liste initiale, nous devons régénérer les filtres.
+        // Si le tableau contient des données, on peut appeler generateFilters directement.
+        // Sinon, on se fie à sendColumnsToServer.
+        if (wasRowColumn && tableData.length > 0) {
+            generateFilters();
+            applyFilters(); // Pour nettoyer le tableau si nécessaire
         }
-    }
+    }
 
-    if (draggedElement.parentElement) {
-        draggedElement.parentElement.removeChild(draggedElement);
-    }
-
-    if (rowColumns.includes(column)) {
-        rowColumns.splice(rowColumns.indexOf(column), 1);
-    } else if (colColumns.includes(column)) {
-        colColumns.splice(colColumns.indexOf(column), 1);
-    }
-
-    if (type === 'row' && !rowColumns.includes(column)) {
-        rowColumns.push(column);
-        addColumnToArea(column, droppableAreaRows, rowColumns, type);
-    } else if (type === 'col' && !colColumns.includes(column)) {
-        colColumns.push(column);
-        addColumnToArea(column, droppableAreaCols, colColumns, type);
-    } else if (type === 'initial') {
-        addColumnToArea(column, initialList, null, type);
-    }
-
-    togglePlaceholders();
-    sendColumnsToServer();
+    togglePlaceholders();
+    sendColumnsToServer(); // Ce call régénérera les filtres si c'est un chargement initial
 }
 function addColumnToArea(column, area, columnList, type) {
-    const newItem = document.createElement('div');
-    newItem.classList.add('draggable-item');
-    newItem.textContent = column;
-    newItem.setAttribute('draggable', 'true');
-    newItem.setAttribute('data-column', column);
-    newItem.id = `drag-${column}-${Date.now()}`;
-    newItem.addEventListener('dragstart', handleDragStart);
+    const newItem = document.createElement('div');
+    newItem.classList.add('draggable-item');
+    newItem.textContent = column;
+    newItem.setAttribute('draggable', 'true');
+    newItem.setAttribute('data-column', column);
+    newItem.id = `drag-${column}-${Date.now()}`;
+    newItem.addEventListener('dragstart', handleDragStart);
 
-    if (type !== 'initial') {
-        newItem.addEventListener('click', function () {
-            // 1. SUPPRIMER l'élément de la zone actuelle
-            area.removeChild(newItem);
+    if (type !== 'initial') {
+        newItem.addEventListener('click', function () {
+            // 1. SUPPRIMER l'élément de la zone actuelle
+            area.removeChild(newItem);
+            
+            // Flag pour savoir si la colonne était un filtre (i.e. dans rowColumns)
+            const wasRowColumnClicked = columnList === rowColumns;
 
-            // 2. Supprimer de la liste (rowColumns ou colColumns)
-            if (columnList) {
-                columnList.splice(columnList.indexOf(column), 1);
+            // 2. Supprimer de la liste (rowColumns ou colColumns)
+            if (columnList) {
+                columnList.splice(columnList.indexOf(column), 1);
+            }
+   
+            addColumnToArea(column, initialList, null, 'initial');
+            
+            // CORRECTION CLÉ (Click) : Si l'élément était un filtre et qu'il est renvoyé à l'initial
+            if (wasRowColumnClicked && tableData.length > 0) {
+                generateFilters();
+                applyFilters(); // Pour nettoyer le tableau si nécessaire
             }
-    
-            addColumnToArea(column, initialList, null, 'initial');
-            togglePlaceholders();
-            sendColumnsToServer();
-        });
-    }
+            
+            togglePlaceholders();
+            sendColumnsToServer();
+        });
+    }
 
-    area.appendChild(newItem);
+    area.appendChild(newItem);
 }
 
 function togglePlaceholders() {
