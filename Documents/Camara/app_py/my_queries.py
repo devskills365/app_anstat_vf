@@ -178,20 +178,51 @@ def obtention_data_mysql_niveauDesagr(indicateur_name):
 # =========================================================
 # 📈 Récupération de données MySQL (DataRequete)
 # =========================================================
-def obtention_data_mysql_requete(indicateur_name, offset=0, limit=500):
+def obtention_data_mysql_requete(indicateur_name, my_index_set, offset=0, limit=2000):
+    """
+    Récupère les données brutes depuis la base de données.
+    
+    Le filtre s'applique sur :
+    1. 'Indicateurs' (égalité stricte).
+    2. 'cle_pivot_table' (vérifie la présence de CHAQUE colonne dans my_index_set).
+    
+    Ce filtre SQL réduit le volume de données chargées avant le traitement final par Pandas.
+    """
     try:
         with session_scope() as session:
+            # 1. Filtre par indicateur (obligatoire)
             query = (
                 session.query(DataRequete)
                 .filter(DataRequete.Indcateurs == indicateur_name)
+            )
+
+            # 2. Filtre sur 'cle_pivot_table' pour réduire la quantité de données
+            # Si my_index_set est vide (set()), la boucle n'aura pas lieu,
+            # et la requête ne sera filtrée que par l'indicateur.
+            if my_index_set:
+                cle_pivot_filters = []
+                
+                # Pour chaque colonne glissée par l'utilisateur (ex: 'Annee', 'Département')
+                for col_name in my_index_set:
+                    # Créer une clause LIKE pour s'assurer que le nom de la colonne est présent.
+                    like_clause = DataRequete.cle_pivot_table.like(f"%{col_name}%")
+                    cle_pivot_filters.append(like_clause)
+
+                # Appliquer TOUS les filtres créés avec une logique AND.
+                query = query.filter(*cle_pivot_filters)
+            
+            # 3. Pagination
+            query = (
+                query
                 .offset(offset)
                 .limit(limit)
             )
 
+            # Exécuter la requête SQL
             df = pd.read_sql(query.statement, session.bind)
 
             if df.empty:
-                print(f"Aucune donnée trouvée pour l'indicateur '{indicateur_name}'")
+                print(f"Aucune donnée trouvée pour l'indicateur '{indicateur_name}' et la sélection de pivot.")
                 return pd.DataFrame()
 
             return df
@@ -200,13 +231,12 @@ def obtention_data_mysql_requete(indicateur_name, offset=0, limit=500):
         print(f"Erreur lors de la récupération des données MySQL pour l'indicateur '{indicateur_name}' : {str(e)}")
         return pd.DataFrame()
 
-
 # =========================================================
 # 🔍 Autocomplétion des indicateurs
 # =========================================================
 def autocompletion():
     try:
-        query = session.query(V1Indicateur.Indicateurs).distinct()
+        query = session.query(NiveauParIndicateurs.Indicateurs).distinct()
         df = pd.read_sql(query.statement, engine)
         print('Issue de queries:', df)
         return df

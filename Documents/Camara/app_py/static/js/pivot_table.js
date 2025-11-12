@@ -14,6 +14,14 @@ let filteredTableData = [];
 let rowColumns = [];
 let colColumns = [];
 
+
+// Pour supprimer les mauvais combinaison
+const COLUMN_DEPENDENCIES = {
+    'Région': ['Département', 'Sous-préfecture'],
+    'Département': ['Région', 'Sous-préfecture'],
+    'Sous-préfecture': ['Région', 'Département'],
+};
+
 // Obtenez le nom de l'indicateur depuis l'URL actuelle
 const pathArray = window.location.pathname.split('/');
 const indicateur_name = decodeURIComponent(pathArray[pathArray.length - 1]);
@@ -37,8 +45,39 @@ function handleDragStart(event) {
     event.dataTransfer.setData('source-id', event.target.id);
 }
 
+// Fonction MODIFIÉE pour gérer l'interdiction de dépôt
 function handleDragOver(event) {
     event.preventDefault();
+
+    // Récupère la colonne que l'utilisateur essaie de glisser
+    const columnToDrop = event.dataTransfer.getData('text/plain');
+    if (!columnToDrop) return;
+
+    // Concatène toutes les colonnes actuellement sélectionnées dans les zones de lignes et de colonnes
+    const currentlySelectedColumns = [...rowColumns, ...colColumns];
+
+    let dropAllowed = true;
+
+    // Vérifie si la colonne en cours de dépôt est exclue par une colonne déjà présente
+    for (const selectedCol of currentlySelectedColumns) {
+        const excludedCols = COLUMN_DEPENDENCIES[selectedCol];
+        if (excludedCols && excludedCols.includes(columnToDrop)) {
+            dropAllowed = false;
+            break;
+        }
+    }
+    
+    // Si le dépôt n'est pas autorisé, modifie l'apparence et empêche le dépôt
+    if (!dropAllowed) {
+        event.dataTransfer.dropEffect = 'none';
+        
+        // Optionnel: ajouter un retour visuel (exemple: fond rouge)
+        event.currentTarget.classList.add('not-allowed-drop');
+        setTimeout(() => event.currentTarget.classList.remove('not-allowed-drop'), 500);
+
+    } else {
+        event.dataTransfer.dropEffect = 'move';
+    }
 }
 
 function handleDrop(event, type) {
@@ -48,6 +87,19 @@ function handleDrop(event, type) {
     const draggedElement = document.querySelector(`[data-column="${column}"][id="${sourceId}"]`) || document.querySelector(`[data-column="${column}"]`);
 
     if (!draggedElement) return;
+
+    // Vérification de la dépendance (répétée pour être sûr, même si handleDragOver a déjà empêché)
+    if (type !== 'initial') {
+        const currentlySelectedColumns = [...rowColumns, ...colColumns];
+        for (const selectedCol of currentlySelectedColumns) {
+            const excludedCols = COLUMN_DEPENDENCIES[selectedCol];
+            if (excludedCols && excludedCols.includes(column)) {
+              
+                
+                return;
+            }
+        }
+    }
 
     if (draggedElement.parentElement) {
         draggedElement.parentElement.removeChild(draggedElement);
@@ -90,7 +142,7 @@ function addColumnToArea(column, area, columnList, type) {
             if (columnList) {
                 columnList.splice(columnList.indexOf(column), 1);
             }
-   
+    
             addColumnToArea(column, initialList, null, 'initial');
             togglePlaceholders();
             sendColumnsToServer();
@@ -158,9 +210,6 @@ function loadData(offset, limit, isInitialLoad = false) {
             isLoading = false;
             return;
         }
-        
-        // ... (Le reste de votre logique reste inchangé) ...
-        
         if (data.data.length < limit) {
              hasMoreData = false;
         }
@@ -312,7 +361,7 @@ function generateFilters() {
         } else if (uniqueValues.length > 0) {
             lastValidValues[colKey] = uniqueValues;
         } else {
-            uniqueValues = ["Valeur manquante"];
+            uniqueValues = ["Missing data"];
         }
 
         const filterGroup = document.createElement('div');
@@ -320,7 +369,7 @@ function generateFilters() {
 
         const filterTitle = document.createElement('div');
         filterTitle.classList.add('filter-title');
-        filterTitle.innerHTML = `<span class="icon-orange">&#43;</span> Filtrer par ${col}`;
+        filterTitle.innerHTML = `<span class="icon-orange">&#43;</span> ${col}`;
         filterTitle.style.cursor = 'pointer';
 
         const checkboxContainer = document.createElement('div');
@@ -436,8 +485,11 @@ document.getElementById('download-xlsx').addEventListener('click', () => downloa
 document.getElementById('download-csv').addEventListener('click', () => downloadFullData('csv'));
 
 function downloadFullData(format) {
+    // Remplacement de 'alert' par une gestion sans alerte bloquante
+    const alertUser = (message) => console.log('Download Alert:', message);
+
     if (isLoading) {
-        alert("Veuillez patienter, un téléchargement est déjà en cours.");
+        alertUser("Veuillez patienter, un téléchargement est déjà en cours.");
         return;
     }
     
@@ -463,7 +515,7 @@ function downloadFullData(format) {
     .then(data => {
         if (data.error) {
             console.error('Erreur du serveur:', data.error);
-            alert("Erreur du serveur lors de la récupération des données.");
+            alertUser("Erreur du serveur lors de la récupération des données.");
             return;
         }
 
@@ -549,7 +601,7 @@ function downloadFullData(format) {
     })
     .catch(error => {
         console.error('Erreur lors du téléchargement:', error);
-        alert("Une erreur est survenue lors du téléchargement.");
+        alertUser("Une erreur est survenue lors du téléchargement.");
     })
     .finally(() => {
         isLoading = false;
@@ -560,8 +612,11 @@ function downloadFullData(format) {
 document.getElementById('download-pdf').addEventListener('click', downloadPDF);
 
 function downloadPDF() {
+    // Remplacement de 'alert' par une gestion sans alerte bloquante
+    const alertUser = (message) => console.log('PDF Alert:', message);
+    
     if (!filteredTableData || filteredTableData.length === 0) {
-        alert("Aucune variable sélectionnée");
+        alertUser("Aucune variable sélectionnée");
         return;
     }
     const { jsPDF } = window.jspdf;

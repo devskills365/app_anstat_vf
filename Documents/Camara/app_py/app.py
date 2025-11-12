@@ -329,58 +329,25 @@ def autocomplete():
 
 @app.route('/filter_indicator/<path:indicateur>')
 def page_filtration_data(indicateur):
-    offset = int(request.args.get('offset', 0))
-    limit = int(request.args.get('limit', 50))
+
     indicateur_SELECT = urllib.parse.unquote(indicateur)
 
     definitions = None
     mode_calcul = None
 
-    # Récupérer les données depuis la base de données
-    df = qr.obtention_data_mysql_requete(indicateur_name=indicateur_SELECT, offset=offset, limit=limit)
-    print("DataFrame original reçu :")
-    print(df.head())
-    
-    # Filtrer par l'indicateur sélectionné
-    if not df.empty and 'Indicateurs' in df.columns:
-        df_filtered = df[df['Indicateurs'].astype(str).str.strip().str.lower() == indicateur_SELECT.strip().lower()].copy()
-        
-        definitions = qr.definition_indicateur(indicateur_SELECT)
-        mode_calcul = qr.mode_calcul_indicateur(indicateur_SELECT)
-    else:
-        return render_template('no_data.html')
-    
-    
-    
-    # Convertir les colonnes en types numériques
-    if 'Annee' in df_filtered.columns:
-        df_filtered['Annee'] = pd.to_numeric(df_filtered['Annee'], errors='coerce').astype('Int64')
-    if 'Valeur' in df_filtered.columns:
-        df_filtered['Valeur'] = pd.to_numeric(df_filtered['Valeur'], errors='coerce')
-    
-    df_filtered = df_filtered.dropna(axis=1, how='all').fillna('-').copy()
 
-    # Le reste de votre code pour la réponse HTML ou JSON
-    if df_filtered.empty:
-        return render_template('no_data.html')
     
-    if request.args.get('format') == 'json':
-        df_json_ready = df_filtered.copy()
-        for col in ['Annee', 'Valeur']:
-            if col in df_json_ready.columns:
-                df_json_ready[col] = df_json_ready[col].apply(
-                    lambda x: int(x) if pd.notna(x) and col == 'Annee' else (float(x) if pd.notna(x) else None)
-                )
-        return jsonify({
-            'data': df_json_ready.to_dict(orient='records'),
-            'definitions': definitions,
-            'mode_calcul': mode_calcul
-        })
+
+
     
+    
+    
+
+    
+
 
     desaggregation_columns = qr.obtention_data_mysql_niveauDesagr(indicateur_SELECT)
-    
-    print('Les colonnes dans le dataframe final:', df_filtered.columns)
+
     print('Notre indicateur:', indicateur_SELECT)
     print('Liste des colonnes de désagrégation:', desaggregation_columns)
     
@@ -394,65 +361,6 @@ def page_filtration_data(indicateur):
 
 
 
-#__________________________
-@app.route('/search_indicatorsR/<path:indicateur>') 
-def request_indicateurR(indicateur):
-    # Charger les données depuis MySQL
-    
-    df= qr.get_data_from_mysql_VR(region_publication)
-    indicateur_SELECT = urllib.parse.unquote(indicateur)
-    definitions=None
-    # Obtenir les options pour chaque filtre (indicateur, région, etc.
-    df_filtered = pd.DataFrame()
-    df_filtered =df
-    # Appliquer le filtre si 'indicateur' existe et que la sélection d'indicateur est présente
-    if indicateur_SELECT and 'Indicateurs' in df_filtered.columns:
-        # Convertir la colonne 'indicateur' en chaînes de caractères
-        df_filtered['Indicateurs'] = df_filtered['Indicateurs'].astype(str).str.strip().str.lower()
-        definitions=qr.definition_indicateur(indicateur_SELECT)
-        mode_calcul=qr.mode_calcul_indicateur(indicateur_SELECT)
-        
-        # Appliquer le filtre sur la colonne 'indicateur'
-        df_filtered = df_filtered[df_filtered['Indicateurs'] == indicateur_SELECT.strip().lower()]
-    else:
-        print("Aucun filtre appliqué sur l'indicateur")
-    # Supprimer les colonnes contenant uniquement des NaN
-    df_filtered = df_filtered.dropna(axis=1, how='all')
-    df_filtered = df_filtered.fillna('-')
-    df_final = pd.DataFrame()
-    for _, row in df_filtered.iterrows():
-        dimension_cols = row['Dimension'].split('/')
-        category_values = row['Modalites'].split('/')
-        dimension_cols = [col.strip() for col in dimension_cols]
-        category_values = [value.strip() for value in category_values]
-        dimension_dict = dict(zip(dimension_cols, category_values))
-        temp_row = pd.Series(dimension_dict)
-        temp_row['Indicateurs'] = row['Indicateurs']
-        temp_row["Valeur"] = row["Valeur"]
-        temp_row["Annee"] = row["Annee"]
-        cle_pivot_table = ",".join(dimension_cols) + ",Annee"
-        temp_row["cle_pivot_table"] = cle_pivot_table
-        # Ajouter cette ligne nettoyée au DataFrame final
-        df_final = pd.concat([df_final, temp_row.to_frame().T], ignore_index=True)
-            
-    df_filtered = df_final.dropna(axis=1, how='all')
-    if df_filtered.empty:
-            return render_template('no_data.html')  # Rediriger vers la page 'Aucune donnée disponible'
-    # Stocker le DataFrame filtré dans la session pour une utilisation ultérieure
-    df_filtered_json = df_filtered.to_json(orient='split')  # Convertir en JSON pour le stockage
-    session['df_filtered'] = df_filtered_json
-    # Obtenir les colonnes valables pour les désagrégations
-    existing_columns = df_filtered.columns.tolist()
-    columns_to_exclude = ['Valeur', 'Indicateurs','cle_pivot_table']
-    desaggregation_columns = [col for col in existing_columns if col not in columns_to_exclude]
-    return render_template(
-        'result.html',
-        definitions=definitions,
-        mode_calcul=mode_calcul,
-        colonne_valable=desaggregation_columns,  # Colonnes à utiliser pour désagréger les données
-        indicateur2=indicateur_SELECT,  # Indicateur sélectionné
-        df_filtered=df_filtered_json  # Data JSON pour le filtrage
-    )
 
     
 @app.route('/process_columns', methods=['POST'])
@@ -461,27 +369,47 @@ def process_columns():
     row_columns = data_request.get('row_columns', [])
     col_columns = data_request.get('col_columns', [])
     value_column = data_request.get('value_column', 'Valeur')
-    indicateur_name = data_request.get('indicateur_name') # Nouveau : Récupérer l'indicateur depuis le front-end
+    indicateur_name = data_request.get('indicateur_name')
+    
+    # Récupérer les paramètres de pagination depuis l'URL
+    offset = request.args.get('offset', type=int)
+    limit = request.args.get('limit', type=int)
+    
     my_index_selection = [row_columns, col_columns]
+    
+    # 1. Calculer l'ensemble des colonnes sélectionnées pour le filtrage
+    my_index_flat = list(chain.from_iterable(my_index_selection))
+    
+    if not my_index_flat:
+         return jsonify({"columns": [], "index": [], "data": []})
+    
+    my_index_set = set(my_index_flat) # <-- C'est cet ensemble qui doit être passé au query
+
+    print('Vérification des valeurs reçues:', my_index_selection)
 
     if not indicateur_name:
         return jsonify({"error": "Nom de l'indicateur manquant dans la requête"}), 400
 
     # Étape 1 : Récupérer les données brutes directement depuis la base de données
-    df = qr.obtention_data_mysql_requete(indicateur_name=indicateur_name)
+    # CORRECTION : Passer my_index_set, offset et limit
+    print('taille:',len(my_index_set))
+    if len(my_index_set)>1:
+        df = qr.obtention_data_mysql_requete(
+            indicateur_name=indicateur_name,
+            my_index_set=my_index_set,
+            offset=offset,
+            limit=limit
+        )
     
     if df.empty:
-        return jsonify({"error": f"Aucune donnée trouvée pour l'indicateur '{indicateur_name}'"}), 400
+        return jsonify({"columns": [], "index": [], "data": []})
 
-    # Étape 2 : Appliquer les mêmes transformations que dans request_indicateur2
+    # Étape 2 : Appliquer les transformations
     df_filtered = df.copy() 
-    
     
     df_final = pd.DataFrame(df_filtered)
     
-    print('data issue V2 , prête analysée',df_final.shape)
     df_filtered = df_final.dropna(axis=1, how='all').copy()
-    
     
     # Nettoyage et conversion des types comme précédemment
     if value_column in df_filtered.columns:
@@ -494,14 +422,15 @@ def process_columns():
         df_filtered['Annee'] = pd.to_numeric(df_filtered['Annee'], errors='coerce').astype('Int64')
 
     try:
-        my_index_flat = list(chain.from_iterable(my_index_selection))
-        my_index_set = set(my_index_flat)
+        data = df_filtered[df_filtered['cle_pivot_table'].apply(lambda x: my_index_set.issubset(set(x.split(','))))].copy()
+        
+        print('Les colonnes des données extraites:',data.head())
+        
+        required_cols = row_columns + col_columns + [value_column]
+        if not all(col in data.columns for col in required_cols):
+             missing_cols = [col for col in required_cols if col not in data.columns]
+             return jsonify({"error": f"Certaines colonnes sélectionnées ({', '.join(missing_cols)}) ne sont pas disponibles dans les données filtrées."}), 400
 
-        data = df_filtered[df_filtered['cle_pivot_table'].apply(lambda x: set(x.split(',')) == my_index_set)].copy()
-        
-        print('Les colonnes des données extraire:',data.head())
-        #print('Afficher',data.head())
-        
         pivot_table = pd.pivot_table(
             data,
             index=row_columns,
@@ -525,7 +454,10 @@ def process_columns():
             "index": list(pivot_table.index),
             "data": pivot_table.values.tolist()
         }
+        
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": f"Erreur lors de la création du tableau croisé dynamique : {e}"}), 400
 
     return jsonify(result_data)
