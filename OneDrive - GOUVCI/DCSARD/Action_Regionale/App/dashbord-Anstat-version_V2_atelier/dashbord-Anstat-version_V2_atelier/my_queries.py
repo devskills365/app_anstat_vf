@@ -5,8 +5,8 @@ import pandas as pd
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
-from elasticsearch import Elasticsearch
-from models import db, Region, IndicateurV2, V1Indicateur, Indicateur, DirectionStatistique  # Importer les modèles
+
+from models import db, Region, IndicateurV2, V1Indicateur, Indicateur, DataRequete  # Importer les modèles
 
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
@@ -18,8 +18,34 @@ load_dotenv()
 # Utiliser les variables d'environnement pour MySQL
 host = os.getenv('MYSQL_HOST')
 database = os.getenv('MYSQL_DATABASE')
+
 user = os.getenv('MYSQL_USER')
 password = os.getenv('MYSQL_PASSWORD')
+
+
+import os
+import mysql.connector
+from mysql.connector import Error
+
+def connect_to_mysql():
+    """Se connecte à une base de données MySQL en utilisant les variables d'environnement."""
+    try:
+        connection = mysql.connector.connect(
+            host=os.getenv('MYSQL_HOST'),
+            database=os.getenv('MYSQL_DATABASE'),
+            user=os.getenv('MYSQL_USER'),
+            password=os.getenv('MYSQL_PASSWORD')
+        )
+
+        if connection.is_connected():
+            print("✅ Connexion réussie à la base MySQL")
+            return connection
+
+    except Error as e:
+        print(f"❌ Erreur de connexion : {e}")
+        return None
+
+
 # Création de la session SQLAlchemy
 engine = create_engine(
     f"mysql+pymysql://{user}:{password}@{host}/{database}"
@@ -41,10 +67,10 @@ def options_regions():
 def options_indicateur():
     try:
         # Récupérer les indicateurs avec SQLAlchemy
-        indicateurs = session.query(Indicateur.indicateur).all()
+        indicateurs = session.query(Indicateur.nom_indicateur).all()
         return sorted([indicateur[0] for indicateur in indicateurs])  # Liste triée
     except Exception as e:
-        print(f"Erreur lors de la récupération des indicateurs : {e}")
+        print(f"Erreur lors de la récupération des indicateurs ---: {e}")
         return []
 
 from sqlalchemy import func
@@ -92,101 +118,102 @@ def get_data(filepath):
         print(f"Erreur lors du chargement du fichier CSV : {e}")
         return pd.DataFrame()  # Retourner un DataFrame vide en cas d'erreur
 
-# Récupérer des données depuis MySQL pour V1_indicateur
-def get_data_from_mysql_V1():
+
+
+
+from contextlib import contextmanager
+from sqlalchemy.orm import Session
+import pandas as pd
+
+@contextmanager
+def session_scope():
+    """Fournit un gestionnaire de contexte pour la session SQLAlchemy."""
+    sess = Session(engine)
     try:
-        # Requête pour récupérer les données depuis V1_indicateur
-        query = session.query(V1Indicateur.Dimension, V1Indicateur.Modalites, V1Indicateur.Indicateurs, V1Indicateur.Annee, V1Indicateur.Valeur)
+        yield sess
+        sess.commit()
+    except:
+        sess.rollback()
+        raise
+    finally:
+        sess.close()
+
+def obtention_data_mysql_niveauDesagr(indicateur_name, offset=0, limit=25):
+    try:
+        with session_scope() as session:
+            # Requête pour récupérer toutes les colonnes
+            query = session.query(
+                V1Indicateur.Dimension,
+                V1Indicateur.Modalites,
+                V1Indicateur.Indicateurs,
+                V1Indicateur.Annee,
+                V1Indicateur.Valeur
+            ).filter(V1Indicateur.Indicateurs == indicateur_name)
+
+    
+
+            # Conversion en DataFrame
+            df = pd.read_sql(query.statement, engine)
+
+            # Vérifier si le DataFrame est vide
+            if df.empty:
+                print(f"Aucune donnée trouvée pour l'indicateur '{indicateur_name}'")
+                return pd.DataFrame()
+
+            # Garder uniquement les lignes avec des Dimension distinctes
+            df = df.drop_duplicates(subset=['Dimension'], keep='first')
+
+            # Appliquer offset et limit sur le DataFrame
+            df = df.iloc[offset:offset + limit]
+
+            return df
+    except Exception as e:
+        print(f"Erreur lors de la récupération des données MySQL pour l'indicateur '{indicateur_name}' : {str(e)}")
+        return pd.DataFrame()
+
+
+
+def obtention_data_mysql_requete(indicateur_name, offset=0, limit=10000):
+    try:
+        with session_scope() as session:
+            # Requête SQLAlchemy : sélectionne toutes les colonnes de DataRequete
+            query = (
+                session.query(DataRequete)
+                .filter(DataRequete.Indcateurs == indicateur_name)
+                .offset(offset)
+                .limit(limit)
+            )
+
+            # Conversion en DataFrame
+            df = pd.read_sql(query.statement, session.bind)
+
+            if df.empty:
+                print(f"Aucune donnée trouvée pour l'indicateur '{indicateur_name}'")
+                return pd.DataFrame()
+
+            return df
+
+    except Exception as e:
+        print(
+            f"Erreur lors de la récupération des données MySQL pour l'indicateur '{indicateur_name}' : {str(e)}"
+        )
+        return pd.DataFrame()
+
+    
+
+def autocompletion():
+    try:
+        query = session.query(
+          V1Indicateur.Indicateurs
+        ).distinct()
         df = pd.read_sql(query.statement, engine)
+        print('issue de queries:',df)
         return df
     except Exception as e:
         print(f"Erreur lors de la récupération des données MySQL : {e}")
-        return pd.DataFrame()  # Retourner un DataFrame vide en cas d'erreur
+        return pd.DataFrame()
 
-# Récupérer des données depuis MySQL pour une région spécifique
-def get_data_from_mysql_VR(region_name):
-    try:
-        # Requête pour récupérer les données filtrées par région
-        query = session.query(V1Indicateur.Dimension, V1Indicateur.Modalites, V1Indicateur.Indicateurs, V1Indicateur.Annee, V1Indicateur.Valeur).filter(V1Indicateur.Region == region_name)
-        df = pd.read_sql(query.statement, engine)
-        return df
-    except Exception as e:
-        print(f"Erreur lors de la récupération des données pour la région {region_name}: {e}")
-        return pd.DataFrame()  # Retourner un DataFrame vide en cas d'erreur
 
-# Insérer des données depuis un fichier Excel dans la base de données
-def insert_data_from_excel(file_path):
-    try:
-        df = pd.read_excel(file_path)
-        df.columns = ['Dimension', 'Modalites', 'Indicateurs', 'Année', 'Valeur']
-        
-        # Insertion dans la base de données
-        for _, row in df.iterrows():
-            data = V1Indicateur(
-                Dimension=row['Dimension'],
-                Modalites=row['Modalites'],
-                Indicateurs=row['Indicateurs'],
-                Annee=row['Année'],
-                Valeur=row['Valeur']
-            )
-            session.add(data)
-        
-        session.commit()  # Valider les changements
-        print("Données insérées avec succès dans la table V1_indicateur.")
-    except Exception as e:
-        print(f"Erreur lors de l'insertion des données : {e}")
-        session.rollback()  # Annuler la transaction en cas d'erreur
-    finally:
-        session.close()  # Fermer la session
-        
-        
 
-#Importer le fichier  excel _______________________________Excel
-def index_data_from_excel():
-    # Lire le fichier Excel
-    data = pd.read_excel('lexique.xlsx')
-    # Vérifie si les données sont récupérées correctement
-    if data.empty:
-        print("Aucune donnée récupérée du fichier Excel.")
-    else:
-        print(f"{len(data)} lignes récupérées depuis Excel.")
-    # Nettoyer les données (remplacer les NaN par des chaînes vides)
-    data = data.fillna('')
-    # Convertir toutes les valeurs en minuscules
-    data = data.applymap(lambda x: x.lower() if isinstance(x, str) else x)
-    # Indexer chaque ligne du fichier Excel
-    for _, row in data.iterrows():
-        document = row.to_dict()  # Convertir la ligne en dictionnaire
-        print("Document à indexer:", document)  # Debug: affiche le document
-        # Essayer d'indexer le document
-        try:
-            print(f"Indexing: {document}")
-        except Exception as e:
-            print(f"Erreur d'indexation pour le document {document}: {e}")
-    print("Données indexées avec succès.")
-    
-    
-import random
-def generate_region_data():
-    age_data = {
-        "male": [random.randint(-200, -50) for _ in range(5)],
-        "female": [random.randint(50, 220) for _ in range(5)],
-        "ages": ['0-4', '5-9', '10-14', '15-19', '20-24']
-    }
-    
-    production_data = {
-        "years": [2010, 2012, 2014, 2016, 2018],
-        "production": [random.randint(300, 900) for _ in range(5)]
-    }
-    
-    indicateurs = {
-        "ind1": random.randint(20, 60),
-        "ind2": random.randint(40, 80),
-        "ind3": random.randint(10, 40)
-    }
-    
-    return {
-        "age_data": age_data,
-        "production_data": production_data,
-        "indicateurs": indicateurs
-    }
+
+

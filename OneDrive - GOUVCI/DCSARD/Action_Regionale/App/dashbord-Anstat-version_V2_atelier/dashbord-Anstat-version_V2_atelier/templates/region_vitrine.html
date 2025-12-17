@@ -31,10 +31,33 @@
         }
         .suggestions-list div { padding: 8px; cursor: pointer; }
         .suggestions-list div:hover { background: #d9e6db; color: #49655A; }
-        #tableauPop { width: 100%; border-collapse: collapse; overflow-x: auto; display: block; white-space: nowrap; }
-        #tableauPop th, #tableauPop td { border: 1px solid #49655A; padding: 8px; text-align: center; min-width: 100px; }
-        #tableauPop th { background-color: #49655A; color: white; }
-        .colonne canvas { width: 100% !important; height: 100% !important; }
+          #tableauPop {
+      width: 100%;
+      border-collapse: collapse;
+      overflow-x: auto;
+      display: block;
+      white-space: nowrap;
+    }
+         #tableauPop th,
+    #tableauPop td {
+      border: 1px solid #49655a;
+      padding: 8px;
+      text-align: center;
+      min-width: 100px;
+    }
+    #tableauPop th {
+      background-color: #49655a;
+      color: white;
+    }
+          .colonne canvas {
+      width: 80% !important;
+      height: 95% !important;
+      max-width: 430px;
+      max-height: 315px;
+      display: block;
+      margin: 0 auto;
+      background: transparent;
+    }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -50,7 +73,7 @@
                 </button>
             </div>
             <nav id="nav-links" class="flex-col md:flex-row md:flex items-center space-y-3 md:space-y-0 md:space-x-4 w-full md:w-auto mt-4 md:mt-0 hidden">
-                <a href="{{ url_for('search_indicatorsR') }}"
+                <a href="{{ url_for('search_indicators') }}"
                    class="text-[#49655A] border-2 border-[#49655A] rounded-full px-4 py-2 uppercase font-semibold text-sm hover:bg-[#49655A] hover:text-white transition-all w-full md:w-auto text-center">
                     Accéder aux indicateurs
                 </a>
@@ -87,20 +110,21 @@
             <!-- Section Régionale (Description et Image) -->
             <div class="flex flex-col lg:flex-row gap-6 mb-6">
                 <div class="flex-1">
-                    <img src="{{ url_for('static', filename='img/PORO.jpg') }}" alt="Région du Poro" class="w-full h-auto max-h-[400px] object-cover rounded-lg shadow-md hover:scale-105 transition-transform">
+                   <img src="{{ url_for('static', filename='img/' ~ region_name ~ '.jpg') }}" 
+     alt="Région du {{ region_name }}" 
+     class="w-full h-auto max-h-[400px] object-cover rounded-lg shadow-md hover:scale-105 transition-transform">
+
                 </div>
-                <div class="flex-1">
+               <div class="flex-1">
                     <h2 class="text-base italic text-[#49655A] font-semibold mb-2">Description de la région</h2>
-                    <p class="text-sm text-gray-700 text-justify">
-                        La région du <strong>Poro</strong>, située dans le nord de la Côte d'Ivoire, bénéficie d'un climat tropical de type soudanais, marqué par deux saisons principales : une saison des pluies et une saison sèche.
-                    </p>
-                    <p class="text-sm text-gray-700 text-justify mt-2">
-                        Les précipitations annuelles varient entre 1 000 et 1 200 mm, favorisant les activités agricoles, notamment la culture du maïs, du coton, et du riz. La région du Poro, avec Korhogo comme chef-lieu, est l'une des plus vastes régions administratives de la Côte d'Ivoire.
-                    </p>
-                    <p class="text-sm text-gray-700 text-justify mt-2">
-                        Elle est composée de quatre départements principaux : <strong>Korhogo, Dikodougou, Sinématiali, et M'Bengué</strong>. Sur le plan économique, le Poro est un centre agricole clé, produisant non seulement des cultures vivrières mais aussi des cultures de rente comme le coton, contribuant à l'économie nationale.
-                    </p>
-                </div>
+                    <p class="text-sm text-gray-700 text-justify" id="description">
+         {{ description[:300] }}{% if description|length > 300 %}...{% endif %}
+    </p>
+     {% if description|length > 300 %}
+    <button id="readMoreBtn" class="text-blue-600 hover:underline mt-2">Lire la suite</button>
+    {% endif %}
+</div>
+
             </div>
 
             <!-- Section Régionale (Statistiques Clés) -->
@@ -108,12 +132,12 @@
                 <h1 class="text-lg font-semibold text-[#49655A] text-center mb-4">Statistiques clés de la région</h1>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div class="colonne bg-white p-4 rounded-lg shadow-md h-80">
-                        <h2 class="text-sm font-semibold text-[#49655A] text-center mb-2">Taux de chômage</h2>
-                        <canvas id="tauxChomageChart"></canvas>
+                        <h2 class="text-sm font-semibold text-[#49655A] text-center mb-2">Nombre de lits pour 1000 Habitants</h2>
+                        <canvas id="nbreLit1000HbtsChart"></canvas>
                     </div>
                     <div class="colonne bg-white p-4 rounded-lg shadow-md h-80">
-                        <h2 class="text-sm font-semibold text-[#49655A] text-center mb-2">Indice synthétique de fécondité</h2>
-                        <canvas id="idhChart"></canvas>
+                        <h2 class="text-sm font-semibold text-[#49655A] text-center mb-2">Proportion de la population vivant à moins de 5 Km d’un centre de santé</h2>
+                        <canvas id="ppcsChart"></canvas>
                     </div>
                     <div class="colonne bg-white p-4 rounded-lg shadow-md h-80">
                         <h2 class="text-sm font-semibold text-[#49655A] text-center mb-2">Taux brut de scolarisation</h2>
@@ -123,18 +147,13 @@
                         <h2 class="text-sm font-semibold text-[#49655A] text-center mb-2">Nombre de localités électrifiées</h2>
                         <canvas id="tauxElectChart"></canvas>
                     </div>
-                    <div class="colonne bg-white p-4 rounded-lg shadow-md h-80">
-                        <h2 class="text-sm font-semibold text-[#49655A] text-center mb-2">Taux d'alphabétisation (2016-2023)</h2>
-                        <canvas id="alphabetisationChartPoro"></canvas>
-                    </div>
-                    <div class="colonne bg-white p-4 rounded-lg shadow-md h-80">
-                        <h2 class="text-sm font-semibold text-[#49655A] text-center mb-2">Population urbaine vs rurale (2023)</h2>
-                        <canvas id="popRuralUrbain"></canvas>
-                    </div>
+                
+
                 </div>
             </div>
 
-            <!-- Section Départementale -->
+            <!-- Section Départementale 
+             
             <div>
                 <h1 class="text-lg font-semibold text-[#49655A] text-center mb-4">Statistiques clés des départements</h1>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -152,11 +171,11 @@
                             <thead>
                                 <tr>
                                     <th>Département</th>
-                                    <!-- Modalités ajoutées dynamiquement -->
+                                    Modalités ajoutées dynamiquement 
                                 </tr>
                             </thead>
                             <tbody>
-                                <!-- Données insérées dynamiquement -->
+                            Données insérées dynamiquement 
                             </tbody>
                         </table>
                     </div>
@@ -167,10 +186,8 @@
                 </div>
             </div>
         </div>
+        -->
     </div>
-
-    <!-- Footer -->
-
     <!-- Footer -->
     <footer class="bg-[#49655A] text-white py-6 mt-8">
         <div class="container mx-auto px-4 flex flex-col md:flex-row justify-between items-center">
@@ -193,67 +210,91 @@
 
     <!-- Scripts JavaScript -->
     <script>
-        document.addEventListener("DOMContentLoaded", function () {
-            // Gestion du menu hamburger
-            const hamburger = document.querySelector(".hamburger");
-            const navLinks = document.querySelector("#nav-links");
+     document.addEventListener("DOMContentLoaded", function () {
+    // Correction de la gestion du menu hamburger
+    const hamburger = document.getElementById("hamburger"); // ⬅️ On utilise l'ID
+    const navLinks = document.getElementById("nav-links");
 
-            hamburger.addEventListener("click", function () {
-                navLinks.classList.toggle("active");
-            });
+    hamburger.addEventListener("click", function () {
+        navLinks.classList.toggle("active");
+    });
 
-            document.addEventListener("click", function (event) {
-                if (!hamburger.contains(event.target) && !navLinks.contains(event.target)) {
-                    navLinks.classList.remove("active");
-                }
-            });
+    document.addEventListener("click", function (event) {
+        if (!hamburger.contains(event.target) && !navLinks.contains(event.target)) {
+            navLinks.classList.remove("active");
+        }
+    });
 
-            // Gestion de la barre de recherche
-            const searchInput = document.getElementById("search-input");
-            const suggestionsContainer = document.getElementById("suggestions");
+    // Gestion de la barre de recherche
+    const searchInput = document.getElementById("search-input");
+    const suggestionsContainer = document.getElementById("suggestions");
 
-            searchInput.addEventListener("input", function () {
-                const query = searchInput.value.trim();
-                if (query.length < 2) {
-                    suggestionsContainer.innerHTML = "";
-                    return;
-                }
+    searchInput.addEventListener("input", function () {
+        const query = searchInput.value.trim();
+        if (query.length < 2) {
+            suggestionsContainer.innerHTML = "";
+            suggestionsContainer.style.display = 'none'; // ⬅️ On cache si le texte est trop court
+            return;
+        }
 
-                fetch(`/autocomplete?query=${encodeURIComponent(query)}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        suggestionsContainer.innerHTML = "";
-                        if (data.length > 0) {
-                            data.forEach(item => {
-                                const div = document.createElement("div");
-                                div.textContent = item;
-                                div.onclick = function () {
-                                    searchInput.value = item;
-                                    suggestionsContainer.innerHTML = "";
-                                    window.location.href = `/search_indicatorsR/${encodeURIComponent(item)}`;
-                                };
-                                suggestionsContainer.appendChild(div);
-                            });
-                        }
+        fetch(`/autocomplete?query=${encodeURIComponent(query)}`)
+            .then(response => response.json())
+            .then(data => {
+                suggestionsContainer.innerHTML = "";
+                if (data.length > 0) {
+                    data.forEach(item => {
+                        const div = document.createElement("div");
+                        div.textContent = item;
+                        div.onclick = function () {
+                            searchInput.value = item;
+                            suggestionsContainer.innerHTML = "";
+                            suggestionsContainer.style.display = 'none'; // ⬅️ On cache après la sélection
+                            window.location.href = `/filter_indicator/${encodeURIComponent(item)}`;
+                        };
+                        suggestionsContainer.appendChild(div);
                     });
-            });
-
-            document.addEventListener("click", function (event) {
-                if (!searchInput.contains(event.target) && !suggestionsContainer.contains(event.target)) {
-                    suggestionsContainer.innerHTML = "";
+                    suggestionsContainer.style.display = 'block'; // ⬅️ On rend visible quand il y a des suggestions
+                } else {
+                    suggestionsContainer.style.display = 'none'; // ⬅️ On cache si la liste est vide
                 }
+            })
+            .catch(error => {
+                console.error('Erreur lors de la récupération des suggestions:', error);
+                suggestionsContainer.style.display = 'none';
             });
-        });
+    });
 
+    document.addEventListener("click", function (event) {
+        if (!searchInput.contains(event.target) && !suggestionsContainer.contains(event.target)) {
+            suggestionsContainer.innerHTML = "";
+            suggestionsContainer.style.display = 'none'; // ⬅️ On masque en cas de clic à l'extérieur
+        }
+    });
+});
         function submitSearch() {
             const query = document.getElementById("search-input").value.trim();
             if (query) {
-                window.location.href = `/search_indicatorsR/${encodeURIComponent(query)}`;
+                window.location.href = `/search_indicators/${encodeURIComponent(query)}`;
             }
             return false;
         }
     </script>
-    <script src="{{ url_for('static', filename='js/education.js') }}"></script>
+    <script>
+document.addEventListener('DOMContentLoaded', function () {
+    const btn = document.getElementById('readMoreBtn');
+    const desc = document.getElementById('description');
+
+    if(btn){
+        btn.addEventListener('click', function(){
+            desc.textContent = `{{ description|tojson }}`; // Remplace par tout le texte
+            btn.style.display = 'none'; // Cache le bouton
+        });
+    }
+});
+</script>
+
+    <script src="{{ url_for('static', filename='js/data_graphique_region.js') }}"></script>
+    
 
 </body>
 </html>

@@ -5,11 +5,20 @@ const initialList = document.getElementById('initial-list');
 const tableContainer = document.getElementById('table-container');
 const filterContainer = document.getElementById('filter-container');
 
-let rowColumns = [];
-let colColumns = [];
+let offset = 0;
+const limit = 50;
+let isLoading = false;
+let hasMoreData = true;
 let tableData = [];
 let filteredTableData = [];
+let rowColumns = [];
+let colColumns = [];
 
+// Obtenez le nom de l'indicateur depuis l'URL actuelle
+const pathArray = window.location.pathname.split('/');
+const indicateur_name = decodeURIComponent(pathArray[pathArray.length - 1]);
+
+// Écouteurs d'événements pour le glisser-déposer
 draggableItems.forEach(item => {
     item.addEventListener('dragstart', handleDragStart);
 });
@@ -25,7 +34,7 @@ initialList.addEventListener('drop', event => handleDrop(event, 'initial'));
 
 function handleDragStart(event) {
     event.dataTransfer.setData('text/plain', event.target.dataset.column);
-    event.dataTransfer.setData('source-id', event.target.id); // Ajoute l'ID pour identifier l'origine
+    event.dataTransfer.setData('source-id', event.target.id);
 }
 
 function handleDragOver(event) {
@@ -40,19 +49,16 @@ function handleDrop(event, type) {
 
     if (!draggedElement) return;
 
-    // Supprimer l'élément de sa zone d'origine
     if (draggedElement.parentElement) {
         draggedElement.parentElement.removeChild(draggedElement);
     }
 
-    // Retirer des tableaux rowColumns ou colColumns si nécessaire
     if (rowColumns.includes(column)) {
         rowColumns.splice(rowColumns.indexOf(column), 1);
     } else if (colColumns.includes(column)) {
         colColumns.splice(colColumns.indexOf(column), 1);
     }
 
-    // Ajouter à la nouvelle zone
     if (type === 'row' && !rowColumns.includes(column)) {
         rowColumns.push(column);
         addColumnToArea(column, droppableAreaRows, rowColumns, type);
@@ -63,9 +69,7 @@ function handleDrop(event, type) {
         addColumnToArea(column, initialList, null, type);
     }
 
-    // Cacher les placeholders si des éléments sont présents
     togglePlaceholders();
-
     sendColumnsToServer();
 }
 
@@ -75,10 +79,9 @@ function addColumnToArea(column, area, columnList, type) {
     newItem.textContent = column;
     newItem.setAttribute('draggable', 'true');
     newItem.setAttribute('data-column', column);
-    newItem.id = `drag-${column}-${Date.now()}`; // ID unique pour éviter les conflits
+    newItem.id = `drag-${column}-${Date.now()}`;
     newItem.addEventListener('dragstart', handleDragStart);
 
-    // Supprimer l'élément au clic (sauf dans initial-list)
     if (type !== 'initial') {
         newItem.addEventListener('click', function () {
             area.removeChild(newItem);
@@ -96,12 +99,26 @@ function addColumnToArea(column, area, columnList, type) {
 function togglePlaceholders() {
     const rowPlaceholder = droppableAreaRows.querySelector('#placeholder-rows');
     const colPlaceholder = droppableAreaCols.querySelector('#placeholder-cols');
-    rowPlaceholder.style.display = droppableAreaRows.children.length > 1 ? 'none' : 'block';
-    colPlaceholder.style.display = droppableAreaCols.children.length > 1 ? 'none' : 'block';
+    if (rowPlaceholder) rowPlaceholder.style.display = droppableAreaRows.children.length > 1 ? 'none' : 'block';
+    if (colPlaceholder) colPlaceholder.style.display = droppableAreaCols.children.length > 1 ? 'none' : 'block';
 }
 
 function sendColumnsToServer() {
-    fetch('/process_columns', {
+    offset = 0;
+    hasMoreData = true;
+    tableData = []; 
+    filteredTableData = [];
+    tableContainer.innerHTML = '';
+    loadData(offset, limit, true);
+}
+
+function loadData(offset, limit, isInitialLoad = false) {
+    if (isLoading || !hasMoreData) {
+        return;
+    }
+    isLoading = true;
+
+    fetch('/process_columns?offset=' + offset + '&limit=' + limit, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -109,12 +126,26 @@ function sendColumnsToServer() {
         body: JSON.stringify({
             row_columns: rowColumns,
             col_columns: colColumns,
-            value_column: 'Valeur'
+            value_column: 'Valeur',
+            indicateur_name: indicateur_name
         })
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) throw new Error('Erreur réseau: ' + response.status);
+        return response.json();
+    })
     .then(data => {
-        tableData = data.data.map(row => {
+        if (data.error) {
+            console.error('Server error:', data.error);
+            isLoading = false;
+            return;
+        }
+        
+        if (data.data.length < limit) {
+            hasMoreData = false;
+        }
+        
+        const newRows = data.data.map(row => {
             const rowData = {};
             data.columns.forEach((col, index) => {
                 rowData[col.join(' ')] = row[index];
@@ -122,61 +153,91 @@ function sendColumnsToServer() {
             return rowData;
         });
 
-        tableData.columns = data.columns;
-        filteredTableData = tableData;
-        generateTable(data);
-        generateFilters();
+        tableData = tableData.concat(newRows);
+        
+        if (isInitialLoad) {
+            tableData.columns = data.columns;
+            applyFilters();
+            generateFilters();
+        } else {
+            // Chargements suivants : ajouter de nouvelles lignes
+            const newFilteredRows = newRows.filter(row => doesRowMatchFilters(row, getActiveFilters()));
+            appendRows({
+                columns: data.columns,
+                data: newFilteredRows.map(row => {
+                     return data.columns.map(col => row[col.join(' ')]);
+                })
+            });
+        }
+
+        isLoading = false;
     })
-    .catch(error => console.error('Erreur:', error));
+    .catch(error => {
+        console.error('Erreur:', error);
+        isLoading = false;
+    });
 }
 
-// Le reste des fonctions (generateTable, generateFilters, applyFilters, etc.) reste inchangé
-// Assurez-vous d'inclure ces fonctions dans votre fichier JS si elles ne sont pas déjà présentes
+// Fonction pour récupérer les filtres actifs
+function getActiveFilters() {
+    const filters = {};
+    const checkedCheckboxes = filterContainer.querySelectorAll('input[type="checkbox"]:checked');
+    checkedCheckboxes.forEach(checkbox => {
+        const column = checkbox.getAttribute('data-column');
+        const value = checkbox.value;
+        if (!filters[column]) {
+            filters[column] = [];
+        }
+        filters[column].push(value);
+    });
+    return filters;
+}
 
 function generateTable(data) {
     tableContainer.innerHTML = '';
 
     const table = document.createElement('table');
+    table.id = 'data-table';
+    table.classList.add('w-full', 'border-collapse');
+
     const thead = document.createElement('thead');
     const tbody = document.createElement('tbody');
 
     const columns = data.columns;
-    const levels = columns.length > 0 ? columns[0].length : 0;
+    const levels = columns.length > 0 && Array.isArray(columns[0]) ? columns[0].length : 0;
 
+    // Génération des en-têtes de table avec colspan
     for (let level = 0; level < levels; level++) {
         const headerRow = document.createElement('tr');
-        let previousValue = null;
-        let colspan = 0;
+        let colspanCount = 1;
+        let previousValue = columns.length > 0 ? columns[0][level] : null;
 
-        columns.forEach((col, index) => {
-            const currentValue = col[level];
+        for (let i = 1; i <= columns.length; i++) {
+            const currentValue = i < columns.length ? columns[i][level] : null;
 
             if (currentValue === previousValue) {
-                colspan += 1;
+                colspanCount++;
             } else {
-                if (colspan > 0) {
-                    headerRow.lastChild.setAttribute('colspan', colspan);
-                }
                 const th = document.createElement('th');
-                th.textContent = currentValue || '';
+                th.textContent = previousValue || '';
+                th.setAttribute('colspan', colspanCount);
+                th.classList.add('sticky', 'top-0', 'z-10', 'bg-[#49655A]');
                 headerRow.appendChild(th);
-                previousValue = currentValue;
-                colspan = 1;
-            }
 
-            if (index === columns.length - 1 && colspan > 1) {
-                headerRow.lastChild.setAttribute('colspan', colspan);
+                previousValue = currentValue;
+                colspanCount = 1;
             }
-        });
+        }
         thead.appendChild(headerRow);
     }
-
+    
+    // Génération du corps de la table
     data.data.forEach(row => {
         const tr = document.createElement('tr');
         columns.forEach((col, index) => {
-            const colKey = col.join(' ');
             const td = document.createElement('td');
-            td.textContent = row[index] || ' ';
+            const key = Array.isArray(col) ? col.join(' ') : col;
+            td.textContent = row[key] !== undefined ? row[key] : ' ';
             tr.appendChild(td);
         });
         tbody.appendChild(tr);
@@ -185,68 +246,72 @@ function generateTable(data) {
     table.appendChild(thead);
     table.appendChild(tbody);
     tableContainer.appendChild(table);
+    mergeTableCells();
 }
 
-// Ajoutez ici les autres fonctions (generateFilters, applyFilters, etc.) si elles ne sont pas déjà incluses
+function appendRows(data) {
+    const table = document.querySelector('#data-table');
+    if (!table) return;
+    const tbody = table.querySelector('tbody') || document.createElement('tbody');
+    
+    data.data.forEach(row => {
+        const tr = document.createElement('tr');
+        data.columns.forEach((col, index) => {
+            const td = document.createElement('td');
+            const key = Array.isArray(col) ? col.join(' ') : col;
+            td.textContent = row[key] !== undefined ? row[key] : ' ';
+            tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+    });
+    
+    if (!table.querySelector('tbody')) {
+        table.appendChild(tbody);
+    }
+    mergeTableCells();
+}
 
-
-// Déclaration de lastValidValues en dehors de la fonction pour conserver les valeurs
-const lastValidValues = {}; // Stockage des dernières valeurs valides par colonne
+const lastValidValues = {};
 
 function generateFilters() {
     filterContainer.innerHTML = '';
 
     const allRows = [...rowColumns];
-    const allColumns = [...colColumns];
-
-    console.log("Columns for filters:", allRows);
-    console.log('Columns for no filter:', allColumns);
 
     allRows.forEach(col => {
-        // Vérifier si la colonne est dans colColumns, auquel cas on ne génère pas de filtre
         if (colColumns.includes(col)) {
-            return; // Ignore les colonnes dans colColumns
+            return;
         }
 
         const colKey = Array.isArray(col) ? col.join(' ') : col;
         let uniqueValues = [...new Set(tableData.map(row => row[colKey]))];
-
-        // Filtrer les valeurs undefined
-        uniqueValues = uniqueValues.filter(val => val !== undefined);
-
-        // Si aucune valeur unique n'est trouvée, utiliser les dernières valeurs valides
-        if (uniqueValues.length === 0) {
-            uniqueValues = lastValidValues[colKey] || ["Valeur manquante"];
-        } else {
-            // Mettre à jour les dernières valeurs valides pour cette colonne
+        uniqueValues = uniqueValues.filter(val => val !== undefined && val !== null);
+        
+        if (uniqueValues.length === 0 && lastValidValues[colKey]) {
+            uniqueValues = lastValidValues[colKey];
+        } else if (uniqueValues.length > 0) {
             lastValidValues[colKey] = uniqueValues;
+        } else {
+            uniqueValues = ["Valeur manquante"];
         }
 
-        console.log(`Unique values for ${colKey}:`, uniqueValues);
-        console.log('Valeur stockées', lastValidValues);
-
-        // Créez un conteneur de filtre dépliable
         const filterGroup = document.createElement('div');
         filterGroup.classList.add('filter-group');
 
-        // Titre du filtre avec fonctionnalité de dépliage/repliage
         const filterTitle = document.createElement('div');
         filterTitle.classList.add('filter-title');
-        filterTitle.innerHTML = `<span class="icon-orange">&#43;</span> Filtrer sur ${col}`;
+        filterTitle.innerHTML = `<span class="icon-orange">&#43;</span> Filtrer par ${col}`;
         filterTitle.style.cursor = 'pointer';
 
-        // Conteneur des cases à cocher (initialement masqué)
         const checkboxContainer = document.createElement('div');
         checkboxContainer.classList.add('checkbox-container');
-        checkboxContainer.style.display = 'none';  // Commence replié
+        checkboxContainer.style.display = 'none';
 
-        // Ajouter l'événement de clic pour déplier/replier
         filterTitle.addEventListener('click', () => {
-            checkboxContainer.style.display = 
+            checkboxContainer.style.display =
                 checkboxContainer.style.display === 'none' ? 'block' : 'none';
         });
 
-        // Créez des cases à cocher pour chaque valeur unique, en gérant les valeurs undefined
         uniqueValues.forEach(value => {
             const checkboxWrapper = document.createElement('div');
             const checkbox = document.createElement('input');
@@ -264,231 +329,215 @@ function generateFilters() {
             checkboxContainer.appendChild(checkboxWrapper);
         });
 
-        // Ajoutez le titre et les options au groupe de filtres
         filterGroup.appendChild(filterTitle);
         filterGroup.appendChild(checkboxContainer);
         filterContainer.appendChild(filterGroup);
     });
 }
 
-
-
-
 function doesRowMatchFilters(row, filters) {
-    // Pour chaque clé de filtre, vérifiez si la ligne contient une valeur correspondante
     return Object.keys(filters).every(column => {
         const filterValues = filters[column];
-        
-        // Vérifiez toutes les valeurs de la ligne qui pourraient correspondre à la colonne filtrée
-        return Object.values(row).some(rowValue => filterValues.includes(rowValue));
+        return filterValues.includes(row[column]);
     });
 }
+
 function applyFilters() {
-    filteredTableData = [...tableData];  // Copie de données pour appliquer les filtres
-    console.log("Applying filters...");
-  
     const checkedCheckboxes = filterContainer.querySelectorAll('input[type="checkbox"]:checked');
     const filters = {};
-  
-    // Collecte des filtres sélectionnés
+
     checkedCheckboxes.forEach(checkbox => {
         const column = checkbox.getAttribute('data-column');
         const value = checkbox.value;
 
-        // Utilisez la clé normalisée pour les filtres
         if (!filters[column]) {
             filters[column] = [];
         }
         filters[column].push(value);
     });
 
-    // Application des filtres en utilisant `doesRowMatchFilters`
-    filteredTableData = filteredTableData.filter(row => doesRowMatchFilters(row, filters));
-
-    console.log('tableau obtenir', filteredTableData);
-
-    // Regénérer le tableau avec les données filtrées
-    generateTable({
-        columns: tableData.columns,
-        data: filteredTableData.map(row => {
-            return tableData.columns.map(col => {
-                const key = Array.isArray(col) ? col.join(' ') : col;  // Utilisez la clé normalisée
-                return row[key];
-            });
-        })
-    });
+    if (Object.keys(filters).length === 0) {
+        filteredTableData = [...tableData];
+    } else {
+        filteredTableData = tableData.filter(row => doesRowMatchFilters(row, filters));
+    }
+    
+    if (tableData.columns) {
+        generateTable({
+            columns: tableData.columns,
+            data: filteredTableData.map(row => {
+                const newRow = {};
+                tableData.columns.forEach(col => {
+                    const key = Array.isArray(col) ? col.join(' ') : col;
+                    newRow[key] = row[key];
+                });
+                return newRow;
+            })
+        });
+    }
 }
 
-
-
-
-
-
+// Fonction de fusion des cellules (optimisée)
 function mergeTableCells() {
-    const table = document.querySelector('#table-container table');
+    const table = document.querySelector('#data-table');
+    if (!table) return;
+
     const rows = table.rows;
     const rowCount = rows.length;
+    
+    // Fusionner les cellules pour les colonnes des "lignes"
+    const rowHeaderCount = rowColumns.length;
+    
+    if (rowCount > 1) {
+        for (let col = 0; col < rowHeaderCount; col++) {
+            let startRow = 1;
+            let startValue = rows[startRow].cells[col].innerText;
 
-    for (let col = 0; col < rows[0].cells.length; col++) {
-        let startRow = 0;
-        let value = rows[0].cells[col].innerText;
-        for (let row = 1; row <= rowCount; row++) {
-            if (row < rowCount && rows[row].cells[col].innerText === value) {
-                continue;
-            } else {
-                if (row - startRow > 1) {
-                    rows[startRow].cells[col].rowSpan = row - startRow;
-                    for (let i = startRow + 1; i < row; i++) {
-                        rows[i].cells[col].style.display = 'none';
+            for (let row = 2; row <= rowCount; row++) {
+                if (row === rowCount || rows[row].cells[col].innerText !== startValue) {
+                    if (row - startRow > 1) {
+                        rows[startRow].cells[col].rowSpan = row - startRow;
+                        for (let i = startRow + 1; i < row; i++) {
+                            rows[i].cells[col].style.display = 'none';
+                        }
                     }
-                }
-                if (row < rowCount) {
-                    startRow = row;
-                    value = rows[row].cells[col].innerText;
+                    if (row < rowCount) {
+                        startRow = row;
+                        startValue = rows[row].cells[col].innerText;
+                    }
                 }
             }
         }
     }
 }
 
-// Ajouter des écouteurs d'événements pour les boutons de téléchargement
-document.getElementById('download-xlsx').addEventListener('click', downloadXLSX);
-document.getElementById('download-csv').addEventListener('click', downloadCSV);
-document.getElementById('download-pdf').addEventListener('click', downloadPDF);
+// Gestion des téléchargements
+document.getElementById('download-xlsx').addEventListener('click', () => downloadFullData('xlsx'));
+document.getElementById('download-csv').addEventListener('click', () => downloadFullData('csv'));
 
-
-
-function downloadXLSX() {
-    if (!filteredTableData || filteredTableData.length === 0) {
-        alert("No data selected.");
+function downloadFullData(format) {
+    if (isLoading) {
+        alert("Veuillez patienter, un téléchargement est déjà en cours.");
         return;
     }
+    
+    isLoading = true;
 
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet([]);
-
-    // Ajouter les en-têtes avec fusion
-    const columns = tableData.columns; // Les colonnes hiérarchiques
-    const levels = columns.length > 0 ? columns[0].length : 0;
-
-    let rowOffset = 0; // Pour suivre l'offset des lignes
-    ws['!merges'] = []; // Initialiser les fusions
-
-    for (let level = 0; level < levels; level++) {
-        const headerRow = [];
-        let previousValue = null;
-        let colspanStartIndex = 0;
-
-        columns.forEach((col, index) => {
-            const currentValue = col[level];
-
-            if (currentValue === previousValue) {
-                // Continue la fusion pour les valeurs identiques
-                return;
-            } else {
-                // Si une valeur change, ajouter une fusion si nécessaire
-                if (previousValue !== null && index - colspanStartIndex > 1) {
-                    ws['!merges'].push({
-                        s: { r: rowOffset, c: colspanStartIndex },
-                        e: { r: rowOffset, c: index - 1 }
-                    });
-                }
-
-                // Ajouter la valeur actuelle et mettre à jour les indices
-                headerRow.push(currentValue || '');
-                previousValue = currentValue;
-                colspanStartIndex = index;
-            }
-
-            // Dernière cellule de la ligne
-            if (index === columns.length - 1 && index - colspanStartIndex > 0) {
-                ws['!merges'].push({
-                    s: { r: rowOffset, c: colspanStartIndex },
-                    e: { r: rowOffset, c: index }
-                });
-            }
-        });
-
-        // Ajouter la ligne d'en-têtes au tableau
-        XLSX.utils.sheet_add_aoa(ws, [headerRow], { origin: rowOffset });
-        rowOffset++;
-    }
-
-    // Ajouter les données du tableau
-    filteredTableData.forEach(row => {
-        const rowData = tableData.columns.map(col => {
-            const key = Array.isArray(col) ? col.join(' ') : col;
-            return row[key];
-        });
-
-        XLSX.utils.sheet_add_aoa(ws, [rowData], { origin: rowOffset });
-        rowOffset++;
-    });
-
-    // Ajouter la feuille de calcul au classeur
-    XLSX.utils.book_append_sheet(wb, ws, 'Data');
-
-    // Télécharger le fichier Excel
-    XLSX.writeFile(wb, 'donnees_filtrees.xlsx');
-}
-
-
-function downloadCSV() {
-    if (!filteredTableData || filteredTableData.length === 0) {
-        alert("Aucune variable sélectionnée");
-        return;
-    }
-
-    // Gérer les colonnes hiérarchiques
-    const columns = tableData.columns; // Colonnes hiérarchiques
-    const levels = columns.length > 0 ? columns[0].length : 0;
-
-    // Construire les en-têtes hiérarchiques
-    const headerRows = Array.from({ length: levels }, () => Array(columns.length).fill(''));
-    columns.forEach((col, colIndex) => {
-        col.forEach((value, levelIndex) => {
-            headerRows[levelIndex][colIndex] = value || '';
-        });
-    });
-
-    // Ajouter les données
-    const dataRows = filteredTableData.map(row =>
-        columns.map(col => {
-            const key = Array.isArray(col) ? col.join(' ') : col; // Normaliser la clé de colonne
-            return row[key] || ''; // Remplace undefined par une chaîne vide
+    // Récupérer toutes les données sans pagination
+    fetch('/process_columns?offset=0&limit=999999', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            row_columns: rowColumns,
+            col_columns: colColumns,
+            value_column: 'Valeur',
+            indicateur_name: indicateur_name
         })
-    );
+    })
+    .then(response => {
+        if (!response.ok) throw new Error('Erreur réseau lors du téléchargement: ' + response.status);
+        return response.json();
+    })
+    .then(data => {
+        if (data.error) {
+            console.error('Erreur du serveur:', data.error);
+            alert("Erreur du serveur lors de la récupération des données.");
+            return;
+        }
 
-    // Combiner les lignes d'en-têtes et de données pour créer le CSV
-    const csvContent = [
-        ...headerRows.map(row => row.map(value => {
-            // Échapper les valeurs contenant des virgules, guillemets ou nouvelles lignes
-            if (typeof value === 'string' && (value.includes(',') || value.includes('"') || value.includes('\n'))) {
-                return `"${value.replace(/"/g, '""')}"`; // Échapper les guillemets
-            }
-            return value;
-        }).join(',')), // Ajouter chaque ligne d'en-tête
-        ...dataRows.map(row => row.map(value => {
-            if (typeof value === 'string' && (value.includes(',') || value.includes('"') || value.includes('\n'))) {
-                return `"${value.replace(/"/g, '""')}"`; // Échapper les guillemets
-            }
-            return value;
-        }).join(',')) // Ajouter chaque ligne de données
-    ].join('\n');
+        const fullData = data.data.map(row => {
+            const rowData = {};
+            data.columns.forEach((col, index) => {
+                rowData[col.join(' ')] = row[index];
+            });
+            return rowData;
+        });
 
-    // Créer un fichier blob et déclencher le téléchargement
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', 'donnees_filtrees.csv');
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+        // Appliquer les filtres du client
+        const filters = getActiveFilters();
+        const filteredDataForDownload = fullData.filter(row => doesRowMatchFilters(row, filters));
+
+        if (format === 'xlsx') {
+            const wb = XLSX.utils.book_new();
+
+            // Générer une matrice d'en-tête à plusieurs niveaux
+            const columns = data.columns;
+            const headerMatrix = [];
+            const levels = columns.length > 0 && Array.isArray(columns[0]) ? columns[0].length : 0;
+
+            for (let level = 0; level < levels; level++) {
+                const headerRow = [];
+                columns.forEach(col => {
+                    headerRow.push(col[level] || '');
+                });
+                headerMatrix.push(headerRow);
+            }
+
+            // Préparer les lignes de données
+            const columnsKeys = columns.map(col => col.join(' '));
+            const dataRows = filteredDataForDownload.map(row => columnsKeys.map(col => row[col]));
+            
+            // Combiner les en-têtes et les données
+            const finalData = headerMatrix.concat(dataRows);
+            const ws = XLSX.utils.aoa_to_sheet(finalData);
+
+            // Appliquer la fusion des cellules pour les en-têtes
+            const merges = [];
+            for (let level = 0; level < levels; level++) {
+                let startCol = 0;
+                let colCount = 1;
+                for (let i = 1; i <= columns.length; i++) {
+                    const value = i < columns.length ? columns[i][level] : null;
+                    if (value === columns[startCol][level]) {
+                        colCount++;
+                    } else {
+                        if (colCount > 1) {
+                            merges.push({
+                                s: { r: level, c: startCol },
+                                e: { r: level, c: startCol + colCount - 1 }
+                            });
+                        }
+                        startCol = i;
+                        colCount = 1;
+                    }
+                }
+            }
+            if (merges.length > 0) {
+                ws['!merges'] = merges;
+            }
+            
+            XLSX.utils.book_append_sheet(wb, ws, 'Données');
+            XLSX.writeFile(wb, `Données_${indicateur_name}.xlsx`);
+
+        } else if (format === 'csv') {
+            // Le format CSV ne gère pas les en-têtes à plusieurs niveaux.
+            // On utilise les en-têtes aplatis.
+            const columnsForDownload = data.columns.map(col => col.join(' '));
+            const finalData = [columnsForDownload, ...filteredDataForDownload.map(row => columnsForDownload.map(col => row[col]))];
+            
+            let csvContent = finalData.map(e => e.join(",")).join("\n");
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.setAttribute("href", URL.createObjectURL(blob));
+            link.setAttribute("download", `ANStat_${indicateur_name}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        }
+    })
+    .catch(error => {
+        console.error('Erreur lors du téléchargement:', error);
+        alert("Une erreur est survenue lors du téléchargement.");
+    })
+    .finally(() => {
+        isLoading = false;
+    });
 }
 
 
-
+document.getElementById('download-pdf').addEventListener('click', downloadPDF);
 
 function downloadPDF() {
     if (!filteredTableData || filteredTableData.length === 0) {
@@ -496,39 +545,27 @@ function downloadPDF() {
         return;
     }
     const { jsPDF } = window.jspdf;
-
-    // Calcul de la largeur totale
-    const pageWidth = 210; // Largeur d'une page A4 en mm
-    const columnWidths = tableData.columns.map(() => 30); // Largeur par défaut des colonnes
+    const pageWidth = 210;
+    const columnWidths = tableData.columns.map(() => 30);
     const totalWidth = columnWidths.reduce((sum, width) => sum + width, 0);
-
-    // Choix de l'orientation
     const orientation = totalWidth > pageWidth ? 'landscape' : 'portrait';
     const doc = new jsPDF({ orientation });
-
-    // Calcul de la largeur ajustée des colonnes
-    const availablePageWidth = orientation === 'landscape' ? 297 - 20 : 210 - 20; // Largeur en paysage ou portrait, moins les marges
+    const availablePageWidth = orientation === 'landscape' ? 297 - 20 : 210 - 20;
     const adjustedColumnWidths = columnWidths.map(width =>
         (width / totalWidth) * availablePageWidth
     );
-
-    // Titre du PDF
     const pdfTitleElement = document.getElementById('pdf-title');
     const pdfTitle = pdfTitleElement ? pdfTitleElement.textContent.trim() : 'Données Filtrées';
     doc.setFontSize(16);
     doc.text(pdfTitle, 10, 15);
-
-    // Préparer les données du tableau
     const columns = tableData.columns;
     const bodyRows = filteredTableData.map(row =>
         columns.map(col => {
             const key = Array.isArray(col) ? col.join(' ') : col;
             const value = row[key] || '';
-            return value.length > 50 ? `${value.substring(0, 47)}...` : value; // Tronquer si nécessaire
+            return value.length > 50 ? `${value.substring(0, 47)}...` : value;
         })
     );
-
-    // Générer le tableau avec autoTable
     doc.autoTable({
         startY: 25,
         head: [columns],
@@ -547,13 +584,22 @@ function downloadPDF() {
             return acc;
         }, {})
     });
-
-    // Télécharger le PDF
     const filename = orientation === 'landscape' ? 'donnees_filtrees_landscape.pdf' : 'donnees_filtrees_portrait.pdf';
     doc.save(filename);
 }
 
+tableContainer.addEventListener('scroll', function () {
+    if (isLoading || !hasMoreData) {
+        return;
+    }
+    if (tableContainer.scrollTop + tableContainer.clientHeight >= tableContainer.scrollHeight - 25) {
+        offset += limit;
+        loadData(offset, limit);
+    }
+});
 
-
-
-
+// Appeler le chargement initial au démarrage
+document.addEventListener('DOMContentLoaded', () => {
+    togglePlaceholders();
+    sendColumnsToServer();
+});

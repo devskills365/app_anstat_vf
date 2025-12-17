@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8 flex flex-col lg:flex-row gap-6">
+    <div class="left-column flex flex-col lg:flex-row gap-6 w-full">
+        <div class="left-section flex-1 bg-white p-6 rounded-xl shadow-lg">
+            <div id="indicators-list" class="mb-4">
+                <h4 class="text-[#49655A] text-lg font-semibold mb-2">Indicateurs clés</h4>
+                <ul id="indicators" class="space-y-2 max-h-40 overflow-y-auto border border-[#49655A] rounded-lg p-2 bg-gray-50"></ul>
+            </div>
+            <div id="map" class="w-full h-80 md:h-[500px] bg-white rounded-lg relative overflow-auto md:overflow-hidden"></div>
+            <div id="tooltip" class="absolute z-50 bg-white border border-[#49655A] p-2 rounded shadow-md pointer-events-none text-[#49655A] text-sm hidden"></div>
+        </div>
+
+        {% include 'includes/demographic_clock.html' %}
+    </div>
+
+    <div class="right-column w-full lg:w-1/3 bg-white p-6 rounded-xl shadow-lg relative min-w-0">
+        <h2 class="text-white text-base font-semibold bg-[#F39323] p-3 rounded-lg sticky top-0 z-10 shadow-md mb-4 flex items-center gap-2">
+            <i class="fas fa-tachometer-alt text-sm"></i> Infos régions
+        </h2>
+        <ul class="region-list space-y-3 max-h-[400px] overflow-y-auto">
+            {% for region in regions %}
+            <li class="bg-white p-3 rounded-lg shadow-sm hover:bg-[#f8f8f8] hover:scale-102 transition-all flex items-start gap-2 min-w-0"
+                onmouseover="highlightRegion('{{ region }}')" 
+                onmouseout="resetRegionHighlight()"> 
+                <i class="fas fa-map-marker-alt text-[#F39323] text-base flex-shrink-0 mt-1"></i>
+                
+                <a href="{{ url_for('region_vitrine', region=region) }}" class="text-[#49655A] font-bold text-sm w-full break-words">
+                    {{ region }}
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+        <div class="scroll-indicator absolute bottom-2 left-1/2 transform -translate-x-1/2 text-[#49655A] text-sm">▼</div>
+    </div>
+    </div>
+
+<div class="charts-row-container mx-auto px-4 py-8 flex flex-col md:flex-row gap-6">
+    <div class="chart-card flex-1 bg-white p-6 rounded-xl shadow-lg">
+        <h5 class="text-[#49655A] text-lg font-semibold mb-4">Indice de Perception de la Corruption (IPC)</h5>
+        <div class="chart-container"><canvas id="chart-line-ipc"></canvas></div>
+    </div>
+    
+    <div class="chart-card flex-1 bg-white p-6 rounded-xl shadow-lg">
+        <h5 class="text-[#49655A] text-lg font-semibold mb-4">Inflation annuelle moyenne (IHPC)</h5>
+        <div class="chart-container"><canvas id="chart-line-enrollment"></canvas></div>
+    </div>
+    
+    <div class="chart-card flex-1 bg-white p-6 rounded-xl shadow-lg">
+        <h5 class="text-[#49655A] text-lg font-semibold mb-4">Dépenses publiques santé</h5>
+        <div class="chart-container"><canvas id="chart-bar-sante-budget"></canvas></div>
+    </div>
+</div>
+{% endblock %}
